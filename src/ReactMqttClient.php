@@ -148,7 +148,7 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
-     * Disconnects the client.
+     * Disconnects from a broker.
      */
     public function disconnect()
     {
@@ -163,6 +163,8 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Subscribes to a topic.
+     *
      * @param string $topic
      * @param int    $qosLevel
      *
@@ -184,6 +186,8 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Unsubscribes from a topic.
+     *
      * @param string $topic
      *
      * @return ExtendedPromiseInterface
@@ -203,6 +207,8 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Publishes a message to the given topic.
+     *
      * @param string $topic
      * @param string $message
      * @param int    $qosLevel
@@ -269,6 +275,8 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Prepares the given stream and sends a CONNECT packet.
+     *
      * @param Stream  $stream
      * @param mixed[] $settings
      * @param int     $timeout
@@ -338,28 +346,28 @@ class ReactMqttClient extends EventEmitter
         foreach ($packets as $packet) {
             switch ($packet->getPacketType()) {
                 case Packet::TYPE_CONNACK:
-                    $this->executeConnectResponse($packet);
+                    $this->handleConnectResponse($packet);
                     break;
                 case Packet::TYPE_SUBACK:
-                    $this->executeSubscribeResponse($packet);
+                    $this->handleSubscribeResponse($packet);
                     break;
                 case Packet::TYPE_UNSUBACK:
-                    $this->executeUnsubscribeResponse($packet);
+                    $this->handleUnsubscribeResponse($packet);
                     break;
                 case Packet::TYPE_PUBLISH:
-                    $this->executePublishRequest($packet);
+                    $this->handlePublishRequest($packet);
                     break;
                 case Packet::TYPE_PUBACK:
-                    $this->executePublishAck($packet);
+                    $this->handlePublishAck($packet);
                     break;
                 case Packet::TYPE_PUBREC:
-                    $this->executePublishReceived($packet);
+                    $this->handlePublishReceived($packet);
                     break;
                 case Packet::TYPE_PUBREL:
-                    $this->executePublishRelease($packet);
+                    $this->handlePublishRelease($packet);
                     break;
                 case Packet::TYPE_PUBCOMP:
-                    $this->executePublishComplete($packet);
+                    $this->handlePublishComplete($packet);
                     break;
                 case Packet::TYPE_PINGRESP:
                     break;
@@ -436,9 +444,11 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Handles a CONNACK packet.
+     *
      * @param ConnectResponsePacket $packet
      */
-    private function executeConnectResponse(ConnectResponsePacket $packet)
+    private function handleConnectResponse(ConnectResponsePacket $packet)
     {
         $this->loop->cancelTimer($this->connectTimer);
 
@@ -455,65 +465,61 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Handles a SUBACK packet.
+     *
      * @param SubscribeResponsePacket $packet
      */
-    private function executeSubscribeResponse(SubscribeResponsePacket $packet)
+    private function handleSubscribeResponse(SubscribeResponsePacket $packet)
     {
         $id = $packet->getIdentifier();
-        if (isset($this->subscribe[$id])) {
-            $returnCodes = $packet->getReturnCodes();
-            foreach ($returnCodes as $index => $returnCode) {
-                $topic = $this->subscribe[$id][$index];
-                if ($packet->isError($returnCode)) {
-                    $this->deferred['subscribe'][$id]->reject(
-                        new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
-                    );
-                } else {
-                    $this->deferred['subscribe'][$id]->resolve($topic);
-                }
+        if (!isset($this->subscribe[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('SUBACK: Packet identifier %d not found.', $id)));
 
-                unset($this->deferred['subscribe'][$id]);
+            return;
+        }
+
+        $returnCodes = $packet->getReturnCodes();
+        foreach ($returnCodes as $index => $returnCode) {
+            $topic = $this->subscribe[$id][$index];
+            if ($packet->isError($returnCode)) {
+                $this->deferred['subscribe'][$id]->reject(
+                    new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
+                );
+            } else {
+                $this->deferred['subscribe'][$id]->resolve($topic);
             }
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'Subscribe packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+
+            unset($this->deferred['subscribe'][$id]);
         }
     }
 
     /**
+     * Handles a UNSUBACK packet.
+     *
      * @param UnsubscribeResponsePacket $packet
      */
-    private function executeUnsubscribeResponse(UnsubscribeResponsePacket $packet)
+    private function handleUnsubscribeResponse(UnsubscribeResponsePacket $packet)
     {
         $id = $packet->getIdentifier();
-        if (isset($this->unsubscribe[$id])) {
-            $topic = $this->unsubscribe[$id];
-            $this->deferred['unsubscribe'][$id]->resolve($topic);
+        if (!isset($this->unsubscribe[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('UNSUBACK: Packet identifier %d not found.', $id)));
 
-            unset($this->unsubscribe[$id]);
-            unset($this->deferred['unsubscribe'][$id]);
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'Unsubscribe packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+            return;
         }
+
+        $topic = $this->unsubscribe[$id];
+        $this->deferred['unsubscribe'][$id]->resolve($topic);
+
+        unset($this->unsubscribe[$id]);
+        unset($this->deferred['unsubscribe'][$id]);
     }
 
     /**
-     * @param PublishRequestPacket $packet
+     * Handles a PUBLISH packet.
+     *
+     *@param PublishRequestPacket $packet
      */
-    private function executePublishRequest(PublishRequestPacket $packet)
+    private function handlePublishRequest(PublishRequestPacket $packet)
     {
         $response = null;
         $emit = true;
@@ -536,53 +542,49 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
-     * @param PublishAckPacket $packet
+     * Handles a PUBACK packet.
+     *
+     *@param PublishAckPacket $packet
      */
-    private function executePublishAck(PublishAckPacket $packet)
+    private function handlePublishAck(PublishAckPacket $packet)
     {
         $id = $packet->getIdentifier();
-        if (isset($this->publishQos1[$id])) {
-            $this->deferred['publish'][$id]->resolve($this->publishQos1[$id]->getPayload());
-            unset($this->publishQos1[$id]);
-            unset($this->deferred['publish'][$id]);
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'PUBACK: Publish packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+        if (!isset($this->publishQos1[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('PUBACK: Packet identifier %d not found.', $id)));
+
+            return;
         }
+
+        $this->deferred['publish'][$id]->resolve($this->publishQos1[$id]->getPayload());
+        unset($this->publishQos1[$id]);
+        unset($this->deferred['publish'][$id]);
     }
 
     /**
-     * @param PublishReceivedPacket $packet
+     * Handles a PUBREC packet.
+     *
+     *@param PublishReceivedPacket $packet
      */
-    private function executePublishReceived(PublishReceivedPacket $packet)
+    private function handlePublishReceived(PublishReceivedPacket $packet)
     {
         $id = $packet->getIdentifier();
-        if (isset($this->publishQos2[$id])) {
-            $response = new PublishReleasePacket();
-            $response->setIdentifier($id);
-            $this->stream->write($response);
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'PUBREC: Publish packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+        if (!isset($this->publishQos2[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('PUBREC: Packet identifier %d not found.', $id)));
+
+            return;
         }
+
+        $response = new PublishReleasePacket();
+        $response->setIdentifier($id);
+        $this->stream->write($response);
     }
 
     /**
-     * @param PublishReleasePacket $packet
+     * Handles a PUBREL packet.
+     *
+     *@param PublishReleasePacket $packet
      */
-    private function executePublishRelease(PublishReleasePacket $packet)
+    private function handlePublishRelease(PublishReleasePacket $packet)
     {
         $id = $packet->getIdentifier();
 
@@ -590,40 +592,32 @@ class ReactMqttClient extends EventEmitter
         $response->setIdentifier($id);
         $this->stream->write($response);
 
-        if (isset($this->incomingQos2[$id])) {
-            $this->emitMessage($this->incomingQos2[$id]);
-            unset($this->incomingQos2[$id]);
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'PUBREL: Incoming packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+        if (!isset($this->incomingQos2[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('PUBREL: Packet identifier %d not found.', $id)));
+
+            return;
         }
+
+        $this->emitMessage($this->incomingQos2[$id]);
+        unset($this->incomingQos2[$id]);
     }
 
     /**
-     * @param PublishCompletePacket $packet
+     * Handles a PUBCOMP packet.
+     *
+     *@param PublishCompletePacket $packet
      */
-    private function executePublishComplete(PublishCompletePacket $packet)
+    private function handlePublishComplete(PublishCompletePacket $packet)
     {
         $id = $packet->getIdentifier();
-        if (isset($this->publishQos2[$id])) {
-            $this->deferred['publish'][$id]->resolve($this->publishQos2[$id]->getPayload());
-            unset($this->publishQos2[$id]);
-            unset($this->deferred['publish'][$id]);
-        } else {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'PUBCOMP: Publish packet identifier %d not found.',
-                        $id
-                    )
-                )
-            );
+        if (!isset($this->publishQos2[$id])) {
+            $this->emitWarning(new \LogicException(sprintf('PUBCOMP: Packet identifier %d not found.', $id)));
+
+            return;
         }
+
+        $this->deferred['publish'][$id]->resolve($this->publishQos2[$id]->getPayload());
+        unset($this->publishQos2[$id]);
+        unset($this->deferred['publish'][$id]);
     }
 }
