@@ -39,7 +39,7 @@ use React\Stream\Stream;
 class ReactMqttClient extends EventEmitter
 {
     /** @var Stream */
-    private $stream;
+    protected $stream;
     /** @var LoopInterface */
     private $loop;
     /** @var StreamParser */
