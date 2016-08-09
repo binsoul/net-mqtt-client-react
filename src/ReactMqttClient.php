@@ -44,6 +44,7 @@ class ReactMqttClient extends EventEmitter
     private $loop;
     /** @var Stream */
     private $stream;
+    protected $stream;
     /** @var StreamParser */
     private $parser;
 
