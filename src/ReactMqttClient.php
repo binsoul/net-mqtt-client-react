@@ -497,7 +497,7 @@ class ReactMqttClient extends EventEmitter
         }
 
         foreach ($topics as $index => $topic) {
-            if ($packet->isError($returnCodes[$index])) {
+            if (!array_key_exists($index, $returnCodes) || $packet->isError($returnCodes[$index])) {
                 $this->deferred['subscribe'][$id]->reject(
                     new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
                 );
