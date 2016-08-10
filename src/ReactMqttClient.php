@@ -513,8 +513,7 @@ class ReactMqttClient extends EventEmitter
         $topic = $this->unsubscribe[$id];
         $this->deferred['unsubscribe'][$id]->resolve($topic);
 
-        unset($this->unsubscribe[$id]);
-        unset($this->deferred['unsubscribe'][$id]);
+        unset($this->unsubscribe[$id], $this->deferred['unsubscribe'][$id]);
     }
 
     /**
@@ -559,8 +558,8 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->deferred['publish'][$id]->resolve($this->publishQos1[$id]->getPayload());
-        unset($this->publishQos1[$id]);
-        unset($this->deferred['publish'][$id]);
+
+        unset($this->publishQos1[$id], $this->deferred['publish'][$id]);
     }
 
     /**
@@ -620,7 +619,7 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->deferred['publish'][$id]->resolve($this->publishQos2[$id]->getPayload());
-        unset($this->publishQos2[$id]);
-        unset($this->deferred['publish'][$id]);
+
+        unset($this->publishQos2[$id], $this->deferred['publish'][$id]);
     }
 }
