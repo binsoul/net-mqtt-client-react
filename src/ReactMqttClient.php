@@ -62,7 +62,7 @@ class ReactMqttClient extends EventEmitter
         'unsubscribe' => [],
         'publish' => [],
     ];
-    /** @var string[] */
+    /** @var string[][] */
     private $subscribe = [];
     /** @var string[] */
     private $unsubscribe = [];
@@ -481,19 +481,32 @@ class ReactMqttClient extends EventEmitter
             return;
         }
 
+        /** @var string[] $topics */
+        $topics = $this->subscribe[$id];
         $returnCodes = $packet->getReturnCodes();
-        foreach ($returnCodes as $index => $returnCode) {
-            $topic = $this->subscribe[$id][$index];
-            if ($packet->isError($returnCode)) {
+        if (count($returnCodes) !== count($topics)) {
+            $this->emitWarning(
+                new \LogicException(
+                    sprintf(
+                        'SUBACK: Expected %d return codes but got %d.',
+                        count($topics),
+                        count($returnCodes)
+                    )
+                )
+            );
+        }
+
+        foreach ($topics as $index => $topic) {
+            if ($packet->isError($returnCodes[$index])) {
                 $this->deferred['subscribe'][$id]->reject(
                     new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
                 );
             } else {
                 $this->deferred['subscribe'][$id]->resolve($topic);
             }
-
-            unset($this->deferred['subscribe'][$id]);
         }
+
+        unset($this->deferred['subscribe'][$id]);
     }
 
     /**
