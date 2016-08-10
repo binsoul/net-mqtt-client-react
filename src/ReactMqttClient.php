@@ -38,12 +38,15 @@ use React\Stream\Stream;
  */
 class ReactMqttClient extends EventEmitter
 {
-    /** @var Stream */
-    private $stream;
+    /** @var ConnectorInterface */
+    private $connector;
     /** @var LoopInterface */
     private $loop;
+    /** @var Stream */
+    private $stream;
     /** @var StreamParser */
     private $parser;
+
     /** @var bool */
     private $isConnected = false;
     /** @var Deferred */
