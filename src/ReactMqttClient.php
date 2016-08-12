@@ -44,7 +44,6 @@ class ReactMqttClient extends EventEmitter
     private $loop;
     /** @var Stream */
     private $stream;
-    protected $stream;
     /** @var StreamParser */
     private $parser;
 
@@ -65,7 +64,7 @@ class ReactMqttClient extends EventEmitter
     ];
     /** @var string[][] */
     private $subscribe = [];
-    /** @var string[] */
+    /** @var string[][] */
     private $unsubscribe = [];
     /** @var PublishRequestPacket[] */
     private $publishQos1 = [];
@@ -104,6 +103,16 @@ class ReactMqttClient extends EventEmitter
     public function isConnected()
     {
         return $this->isConnected;
+    }
+
+    /**
+     * Returns the underlying stream or null if the client is not connected.
+     *
+     * @return Stream|null
+     */
+    public function getStream()
+    {
+        return $this->stream;
     }
 
     /**
@@ -164,6 +173,9 @@ class ReactMqttClient extends EventEmitter
 
         $this->stream->write($packet);
         $this->stream->close();
+        $this->stream = null;
+
+        $this->isConnected = false;
     }
 
     /**
@@ -321,6 +333,7 @@ class ReactMqttClient extends EventEmitter
                 $this->connectDeferred->reject($exception);
 
                 $this->stream->close();
+                $this->stream = null;
             }
         );
 
@@ -524,8 +537,9 @@ class ReactMqttClient extends EventEmitter
             return;
         }
 
-        $topic = $this->unsubscribe[$id];
-        $this->deferred['unsubscribe'][$id]->resolve($topic);
+        foreach ($this->unsubscribe[$id] as $topic) {
+            $this->deferred['unsubscribe'][$id]->resolve($topic);
+        }
 
         unset($this->unsubscribe[$id], $this->deferred['unsubscribe'][$id]);
     }
@@ -533,7 +547,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBLISH packet.
      *
-     *@param PublishRequestPacket $packet
+     * @param PublishRequestPacket $packet
      */
     private function handlePublishRequest(PublishRequestPacket $packet)
     {
@@ -560,7 +574,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBACK packet.
      *
-     *@param PublishAckPacket $packet
+     * @param PublishAckPacket $packet
      */
     private function handlePublishAck(PublishAckPacket $packet)
     {
@@ -579,7 +593,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBREC packet.
      *
-     *@param PublishReceivedPacket $packet
+     * @param PublishReceivedPacket $packet
      */
     private function handlePublishReceived(PublishReceivedPacket $packet)
     {
@@ -598,7 +612,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBREL packet.
      *
-     *@param PublishReleasePacket $packet
+     * @param PublishReleasePacket $packet
      */
     private function handlePublishRelease(PublishReleasePacket $packet)
     {
@@ -621,7 +635,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBCOMP packet.
      *
-     *@param PublishCompletePacket $packet
+     * @param PublishCompletePacket $packet
      */
     private function handlePublishComplete(PublishCompletePacket $packet)
     {
