@@ -50,6 +50,8 @@ class TopicMatcher
         $re = '^' . $re . '$';
         $result = (preg_match(';' . $re . ';', $topic) === 1);
 
+        //echo "Debug: preg_match('$subscription' -> '$re', '$topic') -> " . ($result ? 'true' : 'false') . PHP_EOL;
+
         return $result;
     }
 
