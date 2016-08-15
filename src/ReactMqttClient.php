@@ -38,12 +38,15 @@ use React\Stream\Stream;
  */
 class ReactMqttClient extends EventEmitter
 {
-    /** @var Stream */
-    private $stream;
+    /** @var ConnectorInterface */
+    private $connector;
     /** @var LoopInterface */
     private $loop;
+    /** @var Stream */
+    private $stream;
     /** @var StreamParser */
     private $parser;
+
     /** @var bool */
     private $isConnected = false;
     /** @var Deferred */
@@ -59,9 +62,9 @@ class ReactMqttClient extends EventEmitter
         'unsubscribe' => [],
         'publish' => [],
     ];
-    /** @var string[] */
+    /** @var string[][] */
     private $subscribe = [];
-    /** @var string[] */
+    /** @var string[][] */
     private $unsubscribe = [];
     /** @var PublishRequestPacket[] */
     private $publishQos1 = [];
@@ -100,6 +103,16 @@ class ReactMqttClient extends EventEmitter
     public function isConnected()
     {
         return $this->isConnected;
+    }
+
+    /**
+     * Returns the underlying stream or null if the client is not connected.
+     *
+     * @return Stream|null
+     */
+    public function getStream()
+    {
+        return $this->stream;
     }
 
     /**
@@ -160,6 +173,9 @@ class ReactMqttClient extends EventEmitter
 
         $this->stream->write($packet);
         $this->stream->close();
+        $this->stream = null;
+
+        $this->isConnected = false;
     }
 
     /**
@@ -317,6 +333,7 @@ class ReactMqttClient extends EventEmitter
                 $this->connectDeferred->reject($exception);
 
                 $this->stream->close();
+                $this->stream = null;
             }
         );
 
@@ -478,19 +495,32 @@ class ReactMqttClient extends EventEmitter
             return;
         }
 
+        /** @var string[] $topics */
+        $topics = $this->subscribe[$id];
         $returnCodes = $packet->getReturnCodes();
-        foreach ($returnCodes as $index => $returnCode) {
-            $topic = $this->subscribe[$id][$index];
-            if ($packet->isError($returnCode)) {
+        if (count($returnCodes) !== count($topics)) {
+            $this->emitWarning(
+                new \LogicException(
+                    sprintf(
+                        'SUBACK: Expected %d return codes but got %d.',
+                        count($topics),
+                        count($returnCodes)
+                    )
+                )
+            );
+        }
+
+        foreach ($topics as $index => $topic) {
+            if (!array_key_exists($index, $returnCodes) || $packet->isError($returnCodes[$index])) {
                 $this->deferred['subscribe'][$id]->reject(
                     new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
                 );
             } else {
                 $this->deferred['subscribe'][$id]->resolve($topic);
             }
-
-            unset($this->deferred['subscribe'][$id]);
         }
+
+        unset($this->deferred['subscribe'][$id]);
     }
 
     /**
@@ -507,17 +537,17 @@ class ReactMqttClient extends EventEmitter
             return;
         }
 
-        $topic = $this->unsubscribe[$id];
-        $this->deferred['unsubscribe'][$id]->resolve($topic);
+        foreach ($this->unsubscribe[$id] as $topic) {
+            $this->deferred['unsubscribe'][$id]->resolve($topic);
+        }
 
-        unset($this->unsubscribe[$id]);
-        unset($this->deferred['unsubscribe'][$id]);
+        unset($this->unsubscribe[$id], $this->deferred['unsubscribe'][$id]);
     }
 
     /**
      * Handles a PUBLISH packet.
      *
-     *@param PublishRequestPacket $packet
+     * @param PublishRequestPacket $packet
      */
     private function handlePublishRequest(PublishRequestPacket $packet)
     {
@@ -544,7 +574,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBACK packet.
      *
-     *@param PublishAckPacket $packet
+     * @param PublishAckPacket $packet
      */
     private function handlePublishAck(PublishAckPacket $packet)
     {
@@ -556,14 +586,14 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->deferred['publish'][$id]->resolve($this->publishQos1[$id]->getPayload());
-        unset($this->publishQos1[$id]);
-        unset($this->deferred['publish'][$id]);
+
+        unset($this->publishQos1[$id], $this->deferred['publish'][$id]);
     }
 
     /**
      * Handles a PUBREC packet.
      *
-     *@param PublishReceivedPacket $packet
+     * @param PublishReceivedPacket $packet
      */
     private function handlePublishReceived(PublishReceivedPacket $packet)
     {
@@ -582,7 +612,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBREL packet.
      *
-     *@param PublishReleasePacket $packet
+     * @param PublishReleasePacket $packet
      */
     private function handlePublishRelease(PublishReleasePacket $packet)
     {
@@ -605,7 +635,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles a PUBCOMP packet.
      *
-     *@param PublishCompletePacket $packet
+     * @param PublishCompletePacket $packet
      */
     private function handlePublishComplete(PublishCompletePacket $packet)
     {
@@ -617,7 +647,7 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->deferred['publish'][$id]->resolve($this->publishQos2[$id]->getPayload());
-        unset($this->publishQos2[$id]);
-        unset($this->deferred['publish'][$id]);
+
+        unset($this->publishQos2[$id], $this->deferred['publish'][$id]);
     }
 }
