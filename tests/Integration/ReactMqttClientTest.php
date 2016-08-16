@@ -521,14 +521,12 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
                     $client->publish($topic, $messages[0], $qosLevel)
                     ->then(function ($value) use ($topic, $client) {
                         $this->log(sprintf('Published: %s => %s', $topic, $value));
-                        return $client;
+                    });
 
-                    // After message A is published, Publish message B
-                    })->then(function(ReactMqttClient$client) use ($topic, $client, $messages, $qosLevel){
-                        $client->publish($topic, $messages[1], $qosLevel)
-                        ->then(function ($value) use ($topic) {
-                            $this->log(sprintf('Published: %s => %s', $topic, $value));
-                        });
+                    // Publish message B
+                    $client->publish($topic, $messages[1], $qosLevel)
+                    ->then(function ($value) use ($topic) {
+                        $this->log(sprintf('Published: %s => %s', $topic, $value));
                     });
                 });
             });
