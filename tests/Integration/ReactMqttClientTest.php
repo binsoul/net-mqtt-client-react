@@ -312,11 +312,16 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         $message = 'retain';
 
         // Listen for messages
-        $client->on('message', function ($receivedTopic, $receivedMessage, $isDuplicate, $isRetained) use ($topic, $message) {
+        $client->on('message', function ($receivedTopic, $receivedMessage, $isDuplicate, $isRetained) use ($topic, $message, $client) {
             $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
             $this->assertSame($message, $receivedMessage, 'Incorrect message');
             $this->assertTrue((bool) $isRetained, 'Message should be retained');
-            $this->stopLoop();
+
+            // Cleanup retained message on broker
+            $client->publish($receivedTopic, '', 1, true)
+            ->then(function(){
+                $this->stopLoop();
+            });
         });
 
         $client->connect(self::HOSTNAME, self::PORT)
