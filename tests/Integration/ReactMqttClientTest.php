@@ -439,7 +439,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     /**
      * Test that client is able to publish and receive messages, multiple times
      */
-    public function test_publish_adn_receive_multiple_times()
+    public function test_publish_and_receive_multiple_times()
     {
         $client = $this->buildClient();
         $topic = $this->generateTopic();
