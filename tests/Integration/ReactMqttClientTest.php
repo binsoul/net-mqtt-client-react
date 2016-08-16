@@ -437,6 +437,62 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
+     * Test that client is able to publish and receive messages, multiple times
+     */
+    public function test_publish_adn_receive_multiple_times()
+    {
+        $client = $this->buildClient();
+        $topic = $this->generateTopic();
+        $qosLevel = 0;
+        $messages = [
+            'Skiffs wave from fights like rough suns.',
+            'The cold wench quirky fires the kraken.'
+        ];
+        $count = 0;
+
+        // Listen for messages
+        $client->on('message', function ($receivedTopic, $receivedMessage) use ($topic, $messages, &$count) {
+            $count++;
+
+            $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
+            $this->assertContains($receivedMessage, $messages, 'Unknown message');
+
+            // If we receive 2 (or perhaps more), stop...
+            if($count >= 2){
+                $this->stopLoop();
+            }
+        });
+
+        // Connect
+        $client->connect(self::HOSTNAME, self::PORT)
+            ->then(function (ReactMqttClient $client) use ($topic, $messages, $qosLevel) {
+                // Subscribe
+                $client->subscribe($topic)
+                    ->then(function ($topic) {
+                        $this->log(sprintf('Subscribed: %s', $topic));
+                    })
+                ->then(function () use ($client, $topic, $messages, $qosLevel) {
+
+                    // Publish message A
+                    $client->publish($topic, $messages[0], $qosLevel)
+                    ->then(function ($value) use ($topic, $client) {
+                        $this->log(sprintf('Published: %s => %s', $topic, $value));
+                        return $client;
+
+                    // After message A is published, Publish message B
+                    })->then(function(ReactMqttClient$client) use ($topic, $client, $messages, $qosLevel){
+                        $client->publish($topic, $messages[1], $qosLevel)
+                        ->then(function ($value) use ($topic) {
+                            $this->log(sprintf('Published: %s => %s', $topic, $value));
+                        });
+                    });
+                });
+            });
+
+        $this->startLoop();
+    }
+
+    /**
      * Tests that a client can unsubscribe fram a topic.
      */
     public function test_unsubscribe()
