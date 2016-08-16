@@ -514,8 +514,9 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      */
     public function test_can_subscribe_to_single_level_wildcard_topic()
     {
-        $subscriptionTopic = $this->generateTopic() . '/A/B/+/C';
-        $publishTopic = $this->generateTopic() . '/A/B/foo/C';
+        $topicBase = $this->generateTopic();
+        $subscriptionTopic = $topicBase . '/A/B/+/C';
+        $publishTopic = $topicBase . '/A/B/foo/C';
 
         $message = 'Never vandalize a ship.';
 
@@ -527,8 +528,9 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      */
     public function test_can_subscribe_to_multi_level_wildcard_topic()
     {
-        $subscriptionTopic = $this->generateTopic() . '/A/B/#';
-        $publishTopic = $this->generateTopic() . '/A/B/foo/bar/baz/C';
+        $topicBase = $this->generateTopic();
+        $subscriptionTopic = $topicBase . '/A/B/#';
+        $publishTopic = $topicBase . '/A/B/foo/bar/baz/C';
 
         $message = 'Never sail a kraken.';
 
