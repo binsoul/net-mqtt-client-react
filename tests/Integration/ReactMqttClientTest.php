@@ -191,6 +191,46 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         return $client;
     }
 
+    /**
+     * Tests that client is able to subscribe to a topic or a topic filter pattern (topic that contains a wild-card)
+     * and receive a message when publishing to a topic that matches that pattern.
+     *
+     * @param string $subscriptionTopic Topic or pattern used for subscription, e.g. /A/B/C, /A/B/+, /A/B/#
+     * @param string $publishTopic      Topic used for publication, e.g. /A/B/C, /A/B/foo/bar
+     * @param string $publishMessage    Message to publish
+     */
+    private function subscribeAndPublish($subscriptionTopic, $publishTopic, $publishMessage, $qosLevel = 0)
+    {
+        $client = $this->buildClient();
+
+        // Listen for messages
+        $client->on('message', function ($receivedTopic, $receivedMessage) use ($publishTopic, $publishMessage) {
+            $this->assertSame($publishTopic, $receivedTopic, 'Incorrect topic');
+            $this->assertSame($publishMessage, $receivedMessage, 'Incorrect message');
+
+            $this->stopLoop();
+        });
+
+        // Connect
+        $client->connect(self::HOSTNAME, self::PORT)
+            ->then(function (ReactMqttClient $client) use ($subscriptionTopic, $publishTopic, $publishMessage, $qosLevel) {
+                // Subscribe
+                $client->subscribe($subscriptionTopic)
+                    ->then(function ($topic) {
+                        $this->log(sprintf('Subscribed: %s', $topic));
+                    })
+                    // Publish
+                    ->then(function () use ($client, $publishTopic, $publishMessage, $qosLevel) {
+                        $client->publish($publishTopic, $publishMessage, $qosLevel)
+                            ->then(function ($value) use ($publishTopic) {
+                                $this->log(sprintf('Published: %s => %s', $publishTopic, $value));
+                            });
+                    });
+            });
+
+        $this->startLoop();
+    }
+
     /*******************************************************
      * Actual tests
      ******************************************************/
@@ -235,69 +275,68 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * Tests that messages can be send and received successfully for the given QoS level.
-     */
-    private function subscribeAndPublish($qosLevel)
-    {
-        $client = $this->buildClient();
-        $topic = $this->generateTopic();
-        $message = 'qos='.$qosLevel;
-
-        // Listen for messages
-        $client->on('message', function ($receivedTopic, $receivedMessage) use ($topic, $message) {
-            $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
-            $this->assertSame($message, $receivedMessage, 'Incorrect message');
-            $this->stopLoop();
-        });
-
-        // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function (ReactMqttClient $client) use ($topic, $message, $qosLevel) {
-                // Subscribe
-                $client->subscribe($topic)
-                    ->then(function ($topic) {
-                        $this->log(sprintf('Subscribed: %s', $topic));
-                    })
-                    // Publish
-                    ->then(function () use ($client, $topic, $message, $qosLevel) {
-                        $client->publish($topic, $message, $qosLevel)
-                            ->then(function ($value) use ($topic) {
-                                $this->log(sprintf('Published: %s => %s', $topic, $value));
-                            });
-                    });
-            });
-
-        $this->startLoop();
-    }
-
-    /**
-     * Tests that messages can be send and received successfully.
+     * Tests that messages can be send and received successfully with QoS level 0.
      *
      * @depends test_connect_success
      */
     public function test_send_and_receive_message()
     {
-        $this->subscribeAndPublish(0);
+        $topic = $this->generateTopic();
+        $this->subscribeAndPublish($topic, $topic, 'qos=0', 0);
     }
 
     /**
-     * Tests that messages can be send and received successfully.
+     * Tests that messages can be send and received successfully with QoS level 1.
      *
      * @depends test_connect_success
      */
     public function test_send_and_receive_message_qos_level_1()
     {
-        $this->subscribeAndPublish(1);
+        $topic = $this->generateTopic();
+        $this->subscribeAndPublish($topic, $topic, 'qos=1', 1);
     }
 
     /**
-     * Tests that messages can be send and received successfully.
+     * Tests that messages can be send and received successfully with QoS level 2.
      *
      * @depends test_connect_success
      */
     public function test_send_and_receive_message_qos_level_2()
     {
-        $this->subscribeAndPublish(2);
+        $topic = $this->generateTopic();
+        $this->subscribeAndPublish($topic, $topic, 'qos=2', 2);
+    }
+
+    /**
+     * Test that client can to subscribe to a single level wildcard filter, e.g. /A/B/+/C.
+     *
+     * @depends test_connect_success
+     */
+    public function test_can_subscribe_to_single_level_wildcard_filter()
+    {
+        $topicBase = $this->generateTopic();
+        $subscriptionTopic = $topicBase.'/A/B/+/C';
+        $publishTopic = $topicBase.'/A/B/foo/C';
+
+        $message = 'Never vandalize a ship.';
+
+        $this->subscribeAndPublish($subscriptionTopic, $publishTopic, $message);
+    }
+
+    /**
+     * Test that client can to subscribe to a multi level wildcard filter, e.g. /A/B/#.
+     *
+     * @depends test_connect_success
+     */
+    public function test_can_subscribe_to_multi_level_wildcard_filter()
+    {
+        $topicBase = $this->generateTopic();
+        $subscriptionTopic = $topicBase.'/A/B/#';
+        $publishTopic = $topicBase.'/A/B/foo/bar/baz/C';
+
+        $message = 'Never sail a kraken.';
+
+        $this->subscribeAndPublish($subscriptionTopic, $publishTopic, $message);
     }
 
     /**
@@ -312,11 +351,16 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         $message = 'retain';
 
         // Listen for messages
-        $client->on('message', function ($receivedTopic, $receivedMessage, $isDuplicate, $isRetained) use ($topic, $message) {
+        $client->on('message', function ($receivedTopic, $receivedMessage, $isDuplicate, $isRetained) use ($topic, $message, $client) {
             $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
             $this->assertSame($message, $receivedMessage, 'Incorrect message');
             $this->assertTrue((bool) $isRetained, 'Message should be retained');
-            $this->stopLoop();
+
+            // Cleanup retained message on broker
+            $client->publish($receivedTopic, '', 1, true)
+            ->then(function(){
+                $this->stopLoop();
+            });
         });
 
         $client->connect(self::HOSTNAME, self::PORT)
