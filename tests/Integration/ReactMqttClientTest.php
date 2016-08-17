@@ -80,6 +80,13 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     private $resolver;
 
     /**
+     * Primary client.
+     *
+     * @var ReactMqttClient
+     */
+    private $client;
+
+    /**
      * {@inheritdoc}
      */
     public function setUp()
@@ -125,7 +132,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      */
     private function stopLoop()
     {
-        $this->loop->stop();
+        $this->client->disconnect();
     }
 
     /**
@@ -153,10 +160,11 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      * Returns a new client.
      *
      * @param string $name
+     * @param bool   $isPrimary
      *
      * @return ReactMqttClient
      */
-    private function buildClient($name = '')
+    private function buildClient($name = '', $isPrimary = true)
     {
         $connector = new DnsConnector(new TcpConnector($this->loop), $this->resolver);
         if (self::SECURE) {
@@ -164,13 +172,19 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         }
 
         $client = new ReactMqttClient($connector, $this->loop);
+        if ($isPrimary) {
+            $this->client = $client;
+        }
 
         $client->on('connect', function () use ($name) {
             $this->log(sprintf('Connect: %s:%d', self::HOSTNAME, self::PORT), $name);
         });
 
-        $client->on('disconnect', function () use ($name) {
+        $client->on('disconnect', function () use ($name, $isPrimary) {
             $this->log('Disconnected', $name);
+            if ($isPrimary) {
+                $this->loop->stop();
+            }
         });
 
         $client->on('message', function ($topic, $msg, $isDuplicate, $isRetained) use ($name) {
@@ -358,7 +372,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
 
             // Cleanup retained message on broker
             $client->publish($receivedTopic, '', 1, true)
-            ->then(function(){
+            ->then(function () {
                 $this->stopLoop();
             });
         });
@@ -414,7 +428,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
                 // In order to test that a will is published, we create a
                 // specialised client, which is going to fail its
                 // connection on purpose.
-                $failingClient = $this->buildClient('failing');
+                $failingClient = $this->buildClient('failing', false);
 
                 $options = [
                     'will' => [
@@ -481,7 +495,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * Test that client is able to publish and receive messages, multiple times
+     * Test that client is able to publish and receive messages, multiple times.
      */
     public function test_publish_and_receive_multiple_times()
     {
@@ -490,19 +504,19 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         $qosLevel = 0;
         $messages = [
             'Skiffs wave from fights like rough suns.',
-            'The cold wench quirky fires the kraken.'
+            'The cold wench quirky fires the kraken.',
         ];
         $count = 0;
 
         // Listen for messages
         $client->on('message', function ($receivedTopic, $receivedMessage) use ($topic, $messages, &$count) {
-            $count++;
+            ++$count;
 
             $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
             $this->assertContains($receivedMessage, $messages, 'Unknown message');
 
             // If we receive 2 (or perhaps more), stop...
-            if($count >= 2){
+            if ($count >= 2) {
                 $this->stopLoop();
             }
         });
@@ -516,7 +530,6 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
                         $this->log(sprintf('Subscribed: %s', $topic));
                     })
                 ->then(function () use ($client, $topic, $messages, $qosLevel) {
-
                     // Publish message A
                     $client->publish($topic, $messages[0], $qosLevel)
                     ->then(function ($value) use ($topic, $client) {
