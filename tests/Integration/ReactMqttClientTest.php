@@ -372,9 +372,9 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
 
             // Cleanup retained message on broker
             $client->publish($receivedTopic, '', 1, true)
-            ->then(function () {
-                $this->stopLoop();
-            });
+                ->then(function () {
+                    $this->stopLoop();
+                });
         });
 
         $client->connect(self::HOSTNAME, self::PORT)
@@ -495,11 +495,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-<<<<<<< HEAD
-     * Test that client is able to publish and receive messages, multiple times
-=======
      * Test that client is able to publish and receive messages, multiple times.
->>>>>>> upstream/master
      */
     public function test_publish_and_receive_multiple_times()
     {
@@ -508,31 +504,19 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
         $qosLevel = 0;
         $messages = [
             'Skiffs wave from fights like rough suns.',
-<<<<<<< HEAD
-            'The cold wench quirky fires the kraken.'
-=======
             'The cold wench quirky fires the kraken.',
->>>>>>> upstream/master
         ];
         $count = 0;
 
         // Listen for messages
         $client->on('message', function ($receivedTopic, $receivedMessage) use ($topic, $messages, &$count) {
-<<<<<<< HEAD
-            $count++;
-=======
             ++$count;
->>>>>>> upstream/master
 
             $this->assertSame($topic, $receivedTopic, 'Incorrect topic');
             $this->assertContains($receivedMessage, $messages, 'Unknown message');
 
             // If we receive 2 (or perhaps more), stop...
-<<<<<<< HEAD
-            if($count >= 2){
-=======
             if ($count >= 2) {
->>>>>>> upstream/master
                 $this->stopLoop();
             }
         });
@@ -545,23 +529,19 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
                     ->then(function ($topic) {
                         $this->log(sprintf('Subscribed: %s', $topic));
                     })
-                ->then(function () use ($client, $topic, $messages, $qosLevel) {
-<<<<<<< HEAD
+                    ->then(function () use ($client, $topic, $messages, $qosLevel) {
+                        // Publish message A
+                        $client->publish($topic, $messages[0], $qosLevel)
+                            ->then(function ($value) use ($topic, $client) {
+                                $this->log(sprintf('Published: %s => %s', $topic, $value));
+                            });
 
-=======
->>>>>>> upstream/master
-                    // Publish message A
-                    $client->publish($topic, $messages[0], $qosLevel)
-                    ->then(function ($value) use ($topic, $client) {
-                        $this->log(sprintf('Published: %s => %s', $topic, $value));
+                        // Publish message B
+                        $client->publish($topic, $messages[1], $qosLevel)
+                            ->then(function ($value) use ($topic) {
+                                $this->log(sprintf('Published: %s => %s', $topic, $value));
+                            });
                     });
-
-                    // Publish message B
-                    $client->publish($topic, $messages[1], $qosLevel)
-                    ->then(function ($value) use ($topic) {
-                        $this->log(sprintf('Published: %s => %s', $topic, $value));
-                    });
-                });
             });
 
         $this->startLoop();
