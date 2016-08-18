@@ -372,9 +372,9 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
 
             // Cleanup retained message on broker
             $client->publish($receivedTopic, '', 1, true)
-            ->then(function () {
-                $this->stopLoop();
-            });
+                ->then(function () {
+                    $this->stopLoop();
+                });
         });
 
         $client->connect(self::HOSTNAME, self::PORT)
@@ -529,19 +529,19 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
                     ->then(function ($topic) {
                         $this->log(sprintf('Subscribed: %s', $topic));
                     })
-                ->then(function () use ($client, $topic, $messages, $qosLevel) {
-                    // Publish message A
-                    $client->publish($topic, $messages[0], $qosLevel)
-                    ->then(function ($value) use ($topic, $client) {
-                        $this->log(sprintf('Published: %s => %s', $topic, $value));
-                    });
+                    ->then(function () use ($client, $topic, $messages, $qosLevel) {
+                        // Publish message A
+                        $client->publish($topic, $messages[0], $qosLevel)
+                            ->then(function ($value) use ($topic, $client) {
+                                $this->log(sprintf('Published: %s => %s', $topic, $value));
+                            });
 
-                    // Publish message B
-                    $client->publish($topic, $messages[1], $qosLevel)
-                    ->then(function ($value) use ($topic) {
-                        $this->log(sprintf('Published: %s => %s', $topic, $value));
+                        // Publish message B
+                        $client->publish($topic, $messages[1], $qosLevel)
+                            ->then(function ($value) use ($topic) {
+                                $this->log(sprintf('Published: %s => %s', $topic, $value));
+                            });
                     });
-                });
             });
 
         $this->startLoop();
