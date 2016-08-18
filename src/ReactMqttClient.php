@@ -72,6 +72,8 @@ class ReactMqttClient extends EventEmitter
     private $publishQos2 = [];
     /** @var PublishRequestPacket[] */
     private $incomingQos2 = [];
+    /** @var Packet[] */
+    private $packetQueue = [];
 
     /**
      * Constructs an instance of this class.
@@ -171,8 +173,7 @@ class ReactMqttClient extends EventEmitter
 
         $packet = new DisconnectRequestPacket();
 
-        $this->stream->write($packet);
-        $this->stream->close();
+        $this->stream->end($packet);
         $this->stream = null;
 
         $this->isConnected = false;
@@ -192,7 +193,7 @@ class ReactMqttClient extends EventEmitter
         $packet->setTopic($topic);
         $packet->setQosLevel($qosLevel);
 
-        $this->stream->write($packet);
+        $this->writePacket($packet);
 
         $id = $packet->getIdentifier();
         $this->deferred['subscribe'][$id] = new Deferred();
@@ -213,7 +214,7 @@ class ReactMqttClient extends EventEmitter
         $packet = new UnsubscribeRequestPacket();
         $packet->setTopic($topic);
 
-        $this->stream->write($packet);
+        $this->writePacket($packet);
 
         $id = $packet->getIdentifier();
         $this->deferred['unsubscribe'][$id] = new Deferred();
@@ -241,7 +242,7 @@ class ReactMqttClient extends EventEmitter
         $packet->setRetained($retain);
         $packet->setDuplicate(false);
 
-        $this->stream->write($packet);
+        $this->writePacket($packet);
 
         if ($qosLevel == 0) {
             return new FulfilledPromise($message);
@@ -305,6 +306,13 @@ class ReactMqttClient extends EventEmitter
             $this->handleData($data);
         });
 
+        $this->stream->getBuffer()->on('full-drain', function () {
+            if (count($this->packetQueue) > 0) {
+                $packet = array_shift($this->packetQueue);
+                $this->stream->write($packet);
+            }
+        });
+
         $this->stream->on('error', function (\Exception $e) {
             $this->emitError($e);
         });
@@ -321,7 +329,7 @@ class ReactMqttClient extends EventEmitter
         $this->timer[] = $this->loop->addPeriodicTimer(
             floor($keepAlive * 0.75),
             function () {
-                $this->stream->write(new PingRequestPacket());
+                $this->writePacket(new PingRequestPacket());
             }
         );
 
@@ -349,7 +357,7 @@ class ReactMqttClient extends EventEmitter
             $packet->setWill($will['topic'], $will['message'], $will['qos'], $will['retain']);
         }
 
-        $this->stream->write($packet);
+        $this->writePacket($packet);
     }
 
     /**
@@ -461,6 +469,20 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
+     * Writes a packet to the stream or buffers it if the stream is busy.
+     *
+     * @param Packet $packet
+     */
+    private function writePacket(Packet $packet)
+    {
+        if ($this->stream->getBuffer()->listening) {
+            $this->packetQueue[] = $packet;
+        } else {
+            $this->stream->write($packet);
+        }
+    }
+
+    /**
      * Handles a CONNACK packet.
      *
      * @param ConnectResponsePacket $packet
@@ -563,7 +585,7 @@ class ReactMqttClient extends EventEmitter
 
         if ($response !== null) {
             $response->setIdentifier($packet->getIdentifier());
-            $this->stream->write($response);
+            $this->writePacket($response);
         }
 
         if ($emit) {
@@ -606,7 +628,7 @@ class ReactMqttClient extends EventEmitter
 
         $response = new PublishReleasePacket();
         $response->setIdentifier($id);
-        $this->stream->write($response);
+        $this->writePacket($response);
     }
 
     /**
@@ -620,7 +642,7 @@ class ReactMqttClient extends EventEmitter
 
         $response = new PublishCompletePacket();
         $response->setIdentifier($id);
-        $this->stream->write($response);
+        $this->writePacket($response);
 
         if (!isset($this->incomingQos2[$id])) {
             $this->emitWarning(new \LogicException(sprintf('PUBREL: Packet identifier %d not found.', $id)));
