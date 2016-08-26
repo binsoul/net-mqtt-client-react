@@ -103,6 +103,8 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
             $this->loop->stop();
             $this->fail('Test timeout');
         });
+
+        echo 'Test: '.str_replace(['test_', '_'], ['', ' '], $this->getName()).PHP_EOL.PHP_EOL;
     }
 
     /**
@@ -112,7 +114,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     {
         $this->loop->stop();
 
-        $this->log(str_repeat('- - ', 25));
+        echo str_repeat('- - ', 25).PHP_EOL;
     }
 
     /*******************************************************
@@ -335,7 +337,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * Test that client's is-connected state is updated correctly
+     * Test that client's connection state is updated correctly when connected.
      *
      * @depends test_connect_success
      */
@@ -343,16 +345,42 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     {
         $client = $this->buildClient();
 
-        $client->on('connect', function(Connection $connection) use($client){
+        $client->on('connect', function () use ($client) {
             $this->assertTrue($client->isConnected(), 'Client is should be connected');
             $this->stopLoop();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT, null, 1)
-        ->then(function () use ($client) {
-            $this->assertTrue($client->isConnected());
+        $client->connect(self::HOSTNAME, self::PORT)
+            ->then(function () use ($client) {
+                $this->assertTrue($client->isConnected());
+                $this->stopLoop();
+            });
+
+        $this->startLoop();
+    }
+
+    /**
+     * Test that client's connection state is updated correctly when disconnected.
+     *
+     * @depends test_connect_success
+     */
+    public function test_is_disconnected_when_disconnect_event_emitted()
+    {
+        $client = $this->buildClient();
+
+        $client->on('disconnect', function () use ($client) {
+            $this->assertFalse($client->isConnected(), 'Client is should be disconnected');
             $this->stopLoop();
         });
+
+        $client->connect(self::HOSTNAME, self::PORT)
+            ->then(function () use ($client) {
+                $client->disconnect()
+                    ->then(function () use ($client) {
+                        $this->assertFalse($client->isConnected());
+                        $this->stopLoop();
+                    });
+            });
 
         $this->startLoop();
     }

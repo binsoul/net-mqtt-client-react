@@ -198,6 +198,7 @@ class ReactMqttClient extends EventEmitter
                         $this->isConnected = true;
                         $this->connection = $connection;
 
+                        $this->emit('connect', [$connection, $this]);
                         $deferred->resolve($this->connection);
                     })
                     ->otherwise(function (\Exception $e) use ($deferred, $connection) {
@@ -235,14 +236,15 @@ class ReactMqttClient extends EventEmitter
 
         $deferred = new Deferred();
 
-        $this->startFlow(new OutgoingDisconnectFlow($this->connection))
+        $this->startFlow(new OutgoingDisconnectFlow($this->connection), true)
             ->then(function (Connection $connection) use ($deferred) {
                 $this->isDisconnecting = false;
                 $this->isConnected = false;
 
-                $this->stream->close();
-
+                $this->emit('disconnect', [$connection, $this]);
                 $deferred->resolve($connection);
+
+                $this->stream->close();
             })
             ->otherwise(function () use ($deferred) {
                 $this->isDisconnecting = false;
@@ -425,7 +427,7 @@ class ReactMqttClient extends EventEmitter
             }
         );
 
-        $this->startFlow(new OutgoingConnectFlow($connection, $this->identifierGenerator))
+        $this->startFlow(new OutgoingConnectFlow($connection, $this->identifierGenerator), true)
             ->always(function () use ($responseTimer) {
                 $this->loop->cancelTimer($responseTimer);
             })->then(function (Connection $connection) use ($deferred) {
@@ -583,10 +585,11 @@ class ReactMqttClient extends EventEmitter
      * Starts the given flow.
      *
      * @param Flow $flow
+     * @param bool $isSilent
      *
      * @return ExtendedPromiseInterface
      */
-    private function startFlow(Flow $flow)
+    private function startFlow(Flow $flow, $isSilent = false)
     {
         try {
             $packet = $flow->start();
@@ -597,7 +600,7 @@ class ReactMqttClient extends EventEmitter
         }
 
         $deferred = new Deferred();
-        $internalFlow = new ReactFlow($flow, $deferred, $packet);
+        $internalFlow = new ReactFlow($flow, $deferred, $packet, $isSilent);
 
         if ($packet !== null) {
             if ($this->stream->getBuffer()->listening) {
@@ -653,7 +656,9 @@ class ReactMqttClient extends EventEmitter
     private function finishFlow(ReactFlow $flow)
     {
         if ($flow->isSuccess()) {
-            $this->emit($flow->getCode(), [$flow->getResult(), $this]);
+            if (!$flow->isSilent()) {
+                $this->emit($flow->getCode(), [$flow->getResult(), $this]);
+            }
 
             $flow->getDeferred()->resolve($flow->getResult());
         } else {
