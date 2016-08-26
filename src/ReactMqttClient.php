@@ -2,27 +2,30 @@
 
 namespace BinSoul\Net\Mqtt\Client\React;
 
+use BinSoul\Net\Mqtt\Connection;
+use BinSoul\Net\Mqtt\DefaultConnection;
+use BinSoul\Net\Mqtt\DefaultIdentifierGenerator;
+use BinSoul\Net\Mqtt\Flow;
+use BinSoul\Net\Mqtt\Flow\IncomingPublishFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingConnectFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingDisconnectFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingPingFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingPublishFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingSubscribeFlow;
+use BinSoul\Net\Mqtt\Flow\OutgoingUnsubscribeFlow;
+use BinSoul\Net\Mqtt\DefaultMessage;
+use BinSoul\Net\Mqtt\IdentifierGenerator;
+use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Packet;
-use BinSoul\Net\Mqtt\Packet\ConnectRequestPacket;
-use BinSoul\Net\Mqtt\Packet\ConnectResponsePacket;
-use BinSoul\Net\Mqtt\Packet\DisconnectRequestPacket;
-use BinSoul\Net\Mqtt\Packet\PingRequestPacket;
-use BinSoul\Net\Mqtt\Packet\PublishAckPacket;
-use BinSoul\Net\Mqtt\Packet\PublishCompletePacket;
-use BinSoul\Net\Mqtt\Packet\PublishReceivedPacket;
-use BinSoul\Net\Mqtt\Packet\PublishReleasePacket;
 use BinSoul\Net\Mqtt\Packet\PublishRequestPacket;
-use BinSoul\Net\Mqtt\Packet\SubscribeRequestPacket;
-use BinSoul\Net\Mqtt\Packet\SubscribeResponsePacket;
-use BinSoul\Net\Mqtt\Packet\UnsubscribeRequestPacket;
-use BinSoul\Net\Mqtt\Packet\UnsubscribeResponsePacket;
 use BinSoul\Net\Mqtt\StreamParser;
+use BinSoul\Net\Mqtt\Subscription;
 use Evenement\EventEmitter;
 use React\EventLoop\Timer\TimerInterface;
 use React\Promise\Deferred;
 use React\EventLoop\LoopInterface;
 use React\Promise\ExtendedPromiseInterface;
-use React\Promise\FulfilledPromise;
+use React\Promise\RejectedPromise;
 use React\SocketClient\ConnectorInterface;
 use React\Stream\Stream;
 
@@ -30,11 +33,18 @@ use React\Stream\Stream;
  * Connects to a MQTT broker and subscribes to topics or publishes messages.
  *
  * The following events are emitted:
- *  - connect - The connection to the broker is established.
- *  - disconnect  - The connection to the broker is closed.
- *  - message - An incoming message is received.
+ *  - open - The network connection to the server is established.
+ *  - close - The network connection to the server is closed.
  *  - warning - An event of severity "warning" occurred.
  *  - error - An event of severity "error" occurred.
+ *
+ * If a flow finishes it's result is also emitted, e.g.:
+ *  - connect - The client connected to the broker.
+ *  - disconnect - The client disconnected from the broker.
+ *  - subscribe - The client subscribed to a topic filter.
+ *  - unsubscribe - The client unsubscribed from topic filter.
+ *  - publish - A message was published.
+ *  - message - A message was received.
  */
 class ReactMqttClient extends EventEmitter
 {
@@ -46,44 +56,46 @@ class ReactMqttClient extends EventEmitter
     private $stream;
     /** @var StreamParser */
     private $parser;
+    /** @var IdentifierGenerator */
+    private $identifierGenerator;
 
+    /** @var string */
+    private $host;
+    /** @var int */
+    private $port;
+    /** @var Connection */
+    private $connection;
     /** @var bool */
     private $isConnected = false;
-    /** @var Deferred */
-    private $connectDeferred;
-    /** @var TimerInterface */
-    private $connectTimer;
+    /** @var bool */
+    private $isConnecting = false;
+    /** @var bool */
+    private $isDisconnecting = false;
 
     /** @var TimerInterface[] */
     private $timer = [];
-    /** @var Deferred[][] */
-    private $deferred = [
-        'subscribe' => [],
-        'unsubscribe' => [],
-        'publish' => [],
-    ];
-    /** @var string[][] */
-    private $subscribe = [];
-    /** @var string[][] */
-    private $unsubscribe = [];
-    /** @var PublishRequestPacket[] */
-    private $publishQos1 = [];
-    /** @var PublishRequestPacket[] */
-    private $publishQos2 = [];
-    /** @var PublishRequestPacket[] */
-    private $incomingQos2 = [];
-    /** @var Packet[] */
-    private $packetQueue = [];
+
+    /** @var ReactFlow[] */
+    private $receivingFlows = [];
+    /** @var ReactFlow[] */
+    private $sendingFlows = [];
+    /** @var ReactFlow */
+    private $writtenFlow;
 
     /**
      * Constructs an instance of this class.
      *
-     * @param ConnectorInterface $connector
-     * @param LoopInterface      $loop
-     * @param StreamParser       $parser
+     * @param ConnectorInterface  $connector
+     * @param LoopInterface       $loop
+     * @param IdentifierGenerator $identifierGenerator
+     * @param StreamParser        $parser
      */
-    public function __construct(ConnectorInterface $connector, LoopInterface $loop, StreamParser $parser = null)
-    {
+    public function __construct(
+        ConnectorInterface $connector,
+        LoopInterface $loop,
+        IdentifierGenerator $identifierGenerator = null,
+        StreamParser $parser = null
+    ) {
         $this->connector = $connector;
         $this->loop = $loop;
 
@@ -95,6 +107,31 @@ class ReactMqttClient extends EventEmitter
         $this->parser->onError(function (\Exception $e) {
             $this->emitWarning($e);
         });
+
+        $this->identifierGenerator = $identifierGenerator;
+        if ($this->identifierGenerator === null) {
+            $this->identifierGenerator = new DefaultIdentifierGenerator();
+        }
+    }
+
+    /**
+     * Return the host.
+     *
+     * @return string
+     */
+    public function getHost()
+    {
+        return $this->host;
+    }
+
+    /**
+     * Return the port.
+     *
+     * @return string
+     */
+    public function getPort()
+    {
+        return $this->port;
     }
 
     /**
@@ -120,164 +157,170 @@ class ReactMqttClient extends EventEmitter
     /**
      * Connects to a broker.
      *
-     * @param string  $host
-     * @param int     $port
-     * @param mixed[] $options
-     * @param int     $timeout
-     * @param int     $keepAlive
+     * @param string     $host
+     * @param int        $port
+     * @param Connection $connection
+     * @param int        $timeout
      *
      * @return ExtendedPromiseInterface
      */
-    public function connect($host, $port = 1883, array $options = [], $timeout = 5, $keepAlive = 60)
+    public function connect($host, $port = 1883, Connection $connection = null, $timeout = 5)
     {
-        if ($this->isConnected) {
-            $this->disconnect();
+        if ($this->isConnected || $this->isConnecting) {
+            return new RejectedPromise(new \LogicException('The client is already connected.'));
         }
 
-        $settings = $this->sanitizeOptions($options);
+        $this->isConnecting = true;
+        $this->isConnected = false;
 
-        $this->connectDeferred = new Deferred();
-        $timer = $this->loop->addTimer(
-            $timeout,
-            function () use ($timeout) {
-                $exception = new \RuntimeException(sprintf('Connection timed out after %d seconds.', $timeout));
-                $this->emitError($exception);
-                $this->connectDeferred->reject($exception);
-                $this->emit('disconnect', [$this]);
-                $this->loop->stop();
-            }
-        );
+        $this->host = $host;
+        $this->port = $port;
 
-        $this->connector->create($host, $port)->then(
-            function (Stream $stream) use ($timer, $settings, $timeout, $keepAlive) {
-                $this->loop->cancelTimer($timer);
+        if ($connection === null) {
+            $connection = new DefaultConnection();
+        }
 
-                $this->connectStream($stream, $settings, $timeout, $keepAlive);
-            },
-            function (\Exception $e) {
-                $this->connectDeferred->reject($e);
-            }
-        );
+        if ($connection->getClientID() === '') {
+            $connection = $connection->withClientID($this->identifierGenerator->generateClientID());
+        }
 
-        return $this->connectDeferred->promise();
+        $deferred = new Deferred();
+
+        $this->establishConnection($this->host, $this->port, $timeout)
+            ->then(function (Stream $stream) use ($connection, $deferred, $timeout) {
+                $this->stream = $stream;
+
+                $this->emit('open', [$connection, $this]);
+
+                $this->registerClient($connection, $timeout)
+                    ->then(function (Connection $connection) use ($deferred) {
+                        $this->isConnecting = false;
+                        $this->isConnected = true;
+                        $this->connection = $connection;
+
+                        $deferred->resolve($this->connection);
+                    })
+                    ->otherwise(function (\Exception $e) use ($deferred, $connection) {
+                        $this->isConnecting = false;
+
+                        $this->emitError($e);
+                        $deferred->reject($e);
+
+                        $this->stream->close();
+                        $this->emit('close', [$connection, $this]);
+                    });
+            })
+            ->otherwise(function (\Exception $e) use ($deferred) {
+                $this->isConnecting = false;
+
+                $this->emitError($e);
+                $deferred->reject($e);
+            });
+
+        return $deferred->promise();
     }
 
     /**
      * Disconnects from a broker.
+     *
+     * @return ExtendedPromiseInterface
      */
     public function disconnect()
     {
+        if (!$this->isConnected || $this->isDisconnecting) {
+            return new RejectedPromise(new \LogicException('The client is not connected.'));
+        }
+
+        $this->isDisconnecting = true;
+
+        $deferred = new Deferred();
+
+        $this->startFlow(new OutgoingDisconnectFlow($this->connection))
+            ->then(function (Connection $connection) use ($deferred) {
+                $this->isDisconnecting = false;
+                $this->isConnected = false;
+
+                $this->stream->close();
+
+                $deferred->resolve($connection);
+            })
+            ->otherwise(function () use ($deferred) {
+                $this->isDisconnecting = false;
+                $deferred->reject($this->connection);
+            });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Subscribes to a topic filter.
+     *
+     * @param Subscription $subscription
+     *
+     * @return ExtendedPromiseInterface
+     */
+    public function subscribe(Subscription $subscription)
+    {
         if (!$this->isConnected) {
-            return;
+            return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
-        $packet = new DisconnectRequestPacket();
-
-        $this->stream->end($packet);
-        $this->stream = null;
-
-        $this->isConnected = false;
+        return $this->startFlow(new OutgoingSubscribeFlow([$subscription], $this->identifierGenerator));
     }
 
     /**
-     * Subscribes to a topic.
+     * Unsubscribes from a topic filter.
      *
-     * @param string $topic
-     * @param int    $qosLevel
+     * @param Subscription $subscription
      *
      * @return ExtendedPromiseInterface
      */
-    public function subscribe($topic, $qosLevel = 0)
+    public function unsubscribe(Subscription $subscription)
     {
-        $packet = new SubscribeRequestPacket();
-        $packet->setTopic($topic);
-        $packet->setQosLevel($qosLevel);
+        if (!$this->isConnected) {
+            return new RejectedPromise(new \LogicException('The client is not connected.'));
+        }
 
-        $this->writePacket($packet);
-
-        $id = $packet->getIdentifier();
-        $this->deferred['subscribe'][$id] = new Deferred();
-        $this->subscribe[$id] = [$topic];
-
-        return $this->deferred['subscribe'][$id]->promise();
+        return $this->startFlow(new OutgoingUnsubscribeFlow([$subscription], $this->identifierGenerator));
     }
 
     /**
-     * Unsubscribes from a topic.
+     * Publishes a message.
      *
-     * @param string $topic
-     *
-     * @return ExtendedPromiseInterface
-     */
-    public function unsubscribe($topic)
-    {
-        $packet = new UnsubscribeRequestPacket();
-        $packet->setTopic($topic);
-
-        $this->writePacket($packet);
-
-        $id = $packet->getIdentifier();
-        $this->deferred['unsubscribe'][$id] = new Deferred();
-        $this->unsubscribe[$id] = [$topic];
-
-        return $this->deferred['unsubscribe'][$id]->promise();
-    }
-
-    /**
-     * Publishes a message to the given topic.
-     *
-     * @param string $topic
-     * @param string $message
-     * @param int    $qosLevel
-     * @param bool   $retain
+     * @param Message $message
      *
      * @return ExtendedPromiseInterface
      */
-    public function publish($topic, $message, $qosLevel = 0, $retain = false)
+    public function publish(Message $message)
     {
-        $packet = new PublishRequestPacket();
-        $packet->setTopic($topic);
-        $packet->setPayload($message);
-        $packet->setQosLevel($qosLevel);
-        $packet->setRetained($retain);
-        $packet->setDuplicate(false);
-
-        $this->writePacket($packet);
-
-        if ($qosLevel == 0) {
-            return new FulfilledPromise($message);
+        if (!$this->isConnected) {
+            return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
-        $id = $packet->getIdentifier();
-        $this->deferred['publish'][$id] = new Deferred();
-        if ($qosLevel == 1) {
-            $this->publishQos1[$id] = $packet;
-        } else {
-            $this->publishQos2[$id] = $packet;
-        }
-
-        return $this->deferred['publish'][$id]->promise();
+        return $this->startFlow(new OutgoingPublishFlow($message, $this->identifierGenerator));
     }
 
     /**
      * Calls the given generator periodically and publishes the return value.
      *
      * @param int      $interval
-     * @param string   $topic
+     * @param Message  $message
      * @param callable $generator
-     * @param int      $qosLevel
-     * @param bool     $retain
      *
      * @return ExtendedPromiseInterface
      */
-    public function publishPeriodically($interval, $topic, callable $generator, $qosLevel = 0, $retain = false)
+    public function publishPeriodically($interval, Message $message, callable $generator)
     {
+        if (!$this->isConnected) {
+            return new RejectedPromise(new \LogicException('The client is not connected.'));
+        }
+
         $deferred = new Deferred();
 
         $this->timer[] = $this->loop->addPeriodicTimer(
             $interval,
-            function () use ($topic, $generator, $qosLevel, $retain, $deferred) {
-                $this->publish($topic, $generator($topic), $qosLevel, $retain)->then(
+            function () use ($message, $generator, $deferred) {
+                $this->publish($message->withPayload($generator($message->getTopic())))->then(
                     function ($value) use ($deferred) {
                         $deferred->notify($value);
                     },
@@ -292,144 +335,13 @@ class ReactMqttClient extends EventEmitter
     }
 
     /**
-     * Prepares the given stream and sends a CONNECT packet.
-     *
-     * @param Stream  $stream
-     * @param mixed[] $settings
-     * @param int     $timeout
-     * @param int     $keepAlive
-     */
-    private function connectStream(Stream $stream, array $settings, $timeout, $keepAlive)
-    {
-        $this->stream = $stream;
-        $this->stream->on('data', function ($data) {
-            $this->handleData($data);
-        });
-
-        $this->stream->getBuffer()->on('full-drain', function () {
-            if (count($this->packetQueue) > 0) {
-                $packet = array_shift($this->packetQueue);
-                $this->stream->write($packet);
-            }
-        });
-
-        $this->stream->on('error', function (\Exception $e) {
-            $this->emitError($e);
-        });
-
-        $this->stream->on('close', function () {
-            foreach ($this->timer as $timer) {
-                $this->loop->cancelTimer($timer);
-            }
-
-            $this->isConnected = false;
-            $this->emit('disconnect', [$this]);
-        });
-
-        $this->timer[] = $this->loop->addPeriodicTimer(
-            floor($keepAlive * 0.75),
-            function () {
-                $this->writePacket(new PingRequestPacket());
-            }
-        );
-
-        $this->connectTimer = $this->loop->addTimer(
-            $timeout,
-            function () use ($timeout) {
-                $exception = new \RuntimeException(sprintf('Connection timed out after %d seconds.', $timeout));
-                $this->emitError($exception);
-                $this->connectDeferred->reject($exception);
-
-                $this->stream->close();
-                $this->stream = null;
-            }
-        );
-
-        $packet = new ConnectRequestPacket();
-        $packet->setProtocolLevel($settings['protocol']);
-        $packet->setKeepAlive($keepAlive);
-        $packet->setClientID($settings['clientID']);
-        $packet->setCleanSession($settings['clean']);
-        $packet->setUsername($settings['username']);
-        $packet->setPassword($settings['password']);
-        $will = $settings['will'];
-        if ($will['topic'] != '' && $will['message'] != '') {
-            $packet->setWill($will['topic'], $will['message'], $will['qos'], $will['retain']);
-        }
-
-        $this->writePacket($packet);
-    }
-
-    /**
-     * Handles incoming data.
-     *
-     * @param string $data
-     */
-    private function handleData($data)
-    {
-        $packets = $this->parser->push($data);
-        foreach ($packets as $packet) {
-            switch ($packet->getPacketType()) {
-                case Packet::TYPE_CONNACK:
-                    $this->handleConnectResponse($packet);
-                    break;
-                case Packet::TYPE_SUBACK:
-                    $this->handleSubscribeResponse($packet);
-                    break;
-                case Packet::TYPE_UNSUBACK:
-                    $this->handleUnsubscribeResponse($packet);
-                    break;
-                case Packet::TYPE_PUBLISH:
-                    $this->handlePublishRequest($packet);
-                    break;
-                case Packet::TYPE_PUBACK:
-                    $this->handlePublishAck($packet);
-                    break;
-                case Packet::TYPE_PUBREC:
-                    $this->handlePublishReceived($packet);
-                    break;
-                case Packet::TYPE_PUBREL:
-                    $this->handlePublishRelease($packet);
-                    break;
-                case Packet::TYPE_PUBCOMP:
-                    $this->handlePublishComplete($packet);
-                    break;
-                case Packet::TYPE_PINGRESP:
-                    break;
-                default:
-                    $this->emitWarning(
-                        new \RuntimeException(sprintf('Cannot handle packet of type %d.', $packet->getPacketType()))
-                    );
-            }
-        }
-    }
-
-    /**
-     * Emits messages.
-     *
-     * @param PublishRequestPacket $packet
-     */
-    private function emitMessage(PublishRequestPacket $packet)
-    {
-        $this->emit(
-            'message',
-            [
-                $packet->getTopic(),
-                $packet->getPayload(),
-                $packet->isDuplicate(),
-                $packet->isRetained(),
-            ]
-        );
-    }
-
-    /**
      * Emits warnings.
      *
      * @param \Exception $e
      */
     private function emitWarning(\Exception $e)
     {
-        $this->emit('warning', [$e]);
+        $this->emit('warning', [$e, $this]);
     }
 
     /**
@@ -439,237 +351,316 @@ class ReactMqttClient extends EventEmitter
      */
     private function emitError(\Exception $e)
     {
-        $this->emit('error', [$e]);
+        $this->emit('error', [$e, $this]);
     }
 
     /**
-     * Sanitizes the user provided options.
+     * Establishes a network connection to a server.
      *
-     * @param mixed[] $options
+     * @param string $host
+     * @param int    $port
+     * @param int    $timeout
      *
-     * @return mixed[]
+     * @return ExtendedPromiseInterface
      */
-    private function sanitizeOptions(array $options)
+    private function establishConnection($host, $port, $timeout)
     {
-        $defaults = [
-            'protocol' => 4,
-            'clientID' => '',
-            'clean' => true,
-            'username' => '',
-            'password' => '',
-            'will' => [
-                'topic' => '',
-                'message' => '',
-                'qos' => 0,
-                'retain' => false,
-            ],
-        ];
+        $deferred = new Deferred();
 
-        return array_merge($defaults, $options);
+        $timer = $this->loop->addTimer(
+            $timeout,
+            function () use ($deferred, $timeout) {
+                $exception = new \RuntimeException(sprintf('Connection timed out after %d seconds.', $timeout));
+                $deferred->reject($exception);
+            }
+        );
+
+        $this->connector->create($host, $port)
+            ->always(function () use ($timer) {
+                $this->loop->cancelTimer($timer);
+            })
+            ->then(function (Stream $stream) use ($deferred, $timeout) {
+                $stream->on('data', function ($data) {
+                    $this->handleReceive($data);
+                });
+
+                $stream->getBuffer()->on('full-drain', function () {
+                    $this->handleSend();
+                });
+
+                $stream->on('close', function () {
+                    $this->handleClose();
+                });
+
+                $stream->on('error', function (\Exception $e) {
+                    $this->handleError($e);
+                });
+
+                $deferred->resolve($stream);
+            })
+            ->otherwise(function (\Exception $e) use ($deferred) {
+                $deferred->reject($e);
+            });
+
+        return $deferred->promise();
     }
 
     /**
-     * Writes a packet to the stream or buffers it if the stream is busy.
+     * Registers a new client with the broker.
+     *
+     * @param Connection $connection
+     * @param int        $timeout
+     *
+     * @return ExtendedPromiseInterface
+     */
+    private function registerClient(Connection $connection, $timeout)
+    {
+        $deferred = new Deferred();
+
+        $responseTimer = $this->loop->addTimer(
+            $timeout,
+            function () use ($deferred, $timeout) {
+                $exception = new \RuntimeException(sprintf('No response after %d seconds.', $timeout));
+                $deferred->reject($exception);
+            }
+        );
+
+        $this->startFlow(new OutgoingConnectFlow($connection, $this->identifierGenerator))
+            ->always(function () use ($responseTimer) {
+                $this->loop->cancelTimer($responseTimer);
+            })->then(function (Connection $connection) use ($deferred) {
+                $this->timer[] = $this->loop->addPeriodicTimer(
+                    floor($connection->getKeepAlive() * 0.75),
+                    function () {
+                        $this->startFlow(new OutgoingPingFlow());
+                    }
+                );
+
+                $deferred->resolve($connection);
+            })->otherwise(function (\Exception $e) use ($deferred) {
+                $deferred->reject($e);
+            });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Handles incoming data.
+     *
+     * @param string $data
+     */
+    private function handleReceive($data)
+    {
+        if (!$this->isConnected && !$this->isConnecting) {
+            return;
+        }
+
+        $flowCount = count($this->receivingFlows);
+
+        $packets = $this->parser->push($data);
+        foreach ($packets as $packet) {
+            $this->handlePacket($packet);
+        }
+
+        if ($flowCount > count($this->receivingFlows)) {
+            $this->receivingFlows = array_values($this->receivingFlows);
+        }
+    }
+
+    /**
+     * Handles an incoming packet.
      *
      * @param Packet $packet
      */
-    private function writePacket(Packet $packet)
+    private function handlePacket(Packet $packet)
     {
-        if ($this->stream->getBuffer()->listening) {
-            $this->packetQueue[] = $packet;
-        } else {
-            $this->stream->write($packet);
-        }
-    }
-
-    /**
-     * Handles a CONNACK packet.
-     *
-     * @param ConnectResponsePacket $packet
-     */
-    private function handleConnectResponse(ConnectResponsePacket $packet)
-    {
-        $this->loop->cancelTimer($this->connectTimer);
-
-        if ($packet->isSuccess()) {
-            $this->isConnected = true;
-            $this->emit('connect', [$this]);
-            $this->connectDeferred->resolve($this);
-        } else {
-            $exception = new \RuntimeException($packet->getErrorName());
-            $this->emitError($exception);
-            $this->connectDeferred->reject($exception);
-            $this->stream->close();
-        }
-    }
-
-    /**
-     * Handles a SUBACK packet.
-     *
-     * @param SubscribeResponsePacket $packet
-     */
-    private function handleSubscribeResponse(SubscribeResponsePacket $packet)
-    {
-        $id = $packet->getIdentifier();
-        if (!isset($this->subscribe[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('SUBACK: Packet identifier %d not found.', $id)));
-
-            return;
-        }
-
-        /** @var string[] $topics */
-        $topics = $this->subscribe[$id];
-        $returnCodes = $packet->getReturnCodes();
-        if (count($returnCodes) !== count($topics)) {
-            $this->emitWarning(
-                new \LogicException(
-                    sprintf(
-                        'SUBACK: Expected %d return codes but got %d.',
-                        count($topics),
-                        count($returnCodes)
-                    )
-                )
-            );
-        }
-
-        foreach ($topics as $index => $topic) {
-            if (!array_key_exists($index, $returnCodes) || $packet->isError($returnCodes[$index])) {
-                $this->deferred['subscribe'][$id]->reject(
-                    new \RuntimeException(sprintf('Cannot subscribe to topic "%s".', $topic))
+        switch ($packet->getPacketType()) {
+            case Packet::TYPE_PUBLISH:
+                /* @var PublishRequestPacket $packet */
+                $message = new DefaultMessage(
+                    $packet->getTopic(),
+                    $packet->getPayload(),
+                    $packet->getQosLevel(),
+                    $packet->isRetained(),
+                    $packet->isDuplicate()
                 );
+
+                $this->startFlow(new IncomingPublishFlow($message, $packet->getIdentifier()));
+                break;
+            case Packet::TYPE_CONNACK:
+            case Packet::TYPE_PINGRESP:
+            case Packet::TYPE_SUBACK:
+            case Packet::TYPE_UNSUBACK:
+            case Packet::TYPE_PUBREL:
+            case Packet::TYPE_PUBACK:
+            case Packet::TYPE_PUBREC:
+            case Packet::TYPE_PUBCOMP:
+                $flowFound = false;
+                foreach ($this->receivingFlows as $index => $flow) {
+                    if ($flow->accept($packet)) {
+                        $flowFound = true;
+
+                        unset($this->receivingFlows[$index]);
+                        $this->continueFlow($flow, $packet);
+
+                        break;
+                    }
+                }
+
+                if (!$flowFound) {
+                    $this->emitWarning(
+                        new \LogicException(sprintf('Received unexpected packet of type %d.', $packet->getPacketType()))
+                    );
+                }
+                break;
+            default:
+                $this->emitWarning(
+                    new \LogicException(sprintf('Cannot handle packet of type %d.', $packet->getPacketType()))
+                );
+        }
+    }
+
+    /**
+     * Handles outgoing packets.
+     */
+    private function handleSend()
+    {
+        $flow = null;
+        if ($this->writtenFlow !== null) {
+            $flow = $this->writtenFlow;
+            $this->writtenFlow = null;
+        }
+
+        if (count($this->sendingFlows) > 0) {
+            $this->writtenFlow = array_shift($this->sendingFlows);
+            $this->stream->write($this->writtenFlow->getPacket());
+        }
+
+        if ($flow !== null) {
+            if ($flow->isFinished()) {
+                $this->loop->nextTick(function () use ($flow) {
+                    $this->finishFlow($flow);
+                });
             } else {
-                $this->deferred['subscribe'][$id]->resolve($topic);
+                $this->receivingFlows[] = $flow;
             }
         }
-
-        unset($this->deferred['subscribe'][$id]);
     }
 
     /**
-     * Handles a UNSUBACK packet.
-     *
-     * @param UnsubscribeResponsePacket $packet
+     * Handles closing of the stream.
      */
-    private function handleUnsubscribeResponse(UnsubscribeResponsePacket $packet)
+    private function handleClose()
     {
-        $id = $packet->getIdentifier();
-        if (!isset($this->unsubscribe[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('UNSUBACK: Packet identifier %d not found.', $id)));
+        foreach ($this->timer as $timer) {
+            $this->loop->cancelTimer($timer);
+        }
+
+        $connection = $this->connection;
+
+        $this->isConnecting = false;
+        $this->isDisconnecting = false;
+        $this->isConnected = false;
+        $this->connection = null;
+        $this->stream = null;
+
+        if ($connection !== null) {
+            $this->emit('close', [$connection, $this]);
+        }
+    }
+
+    /**
+     * Handles errors of the stream.
+     *
+     * @param \Exception $e
+     */
+    private function handleError(\Exception $e)
+    {
+        $this->emitError($e);
+    }
+
+    /**
+     * Starts the given flow.
+     *
+     * @param Flow $flow
+     *
+     * @return ExtendedPromiseInterface
+     */
+    private function startFlow(Flow $flow)
+    {
+        try {
+            $packet = $flow->start();
+        } catch (\Exception $e) {
+            $this->emitError($e);
+
+            return new RejectedPromise($e);
+        }
+
+        $deferred = new Deferred();
+        $internalFlow = new ReactFlow($flow, $deferred, $packet);
+
+        if ($packet !== null) {
+            if ($this->stream->getBuffer()->listening) {
+                $this->sendingFlows[] = $internalFlow;
+            } else {
+                $this->stream->write($packet);
+                $this->writtenFlow = $internalFlow;
+            }
+        } else {
+            $this->loop->nextTick(function () use ($internalFlow) {
+                $this->finishFlow($internalFlow);
+            });
+        }
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Continues the given flow.
+     *
+     * @param ReactFlow $flow
+     * @param Packet    $packet
+     */
+    private function continueFlow(ReactFlow $flow, Packet $packet)
+    {
+        try {
+            $response = $flow->next($packet);
+        } catch (\Exception $e) {
+            $this->emitError($e);
 
             return;
-        }
-
-        foreach ($this->unsubscribe[$id] as $topic) {
-            $this->deferred['unsubscribe'][$id]->resolve($topic);
-        }
-
-        unset($this->unsubscribe[$id], $this->deferred['unsubscribe'][$id]);
-    }
-
-    /**
-     * Handles a PUBLISH packet.
-     *
-     * @param PublishRequestPacket $packet
-     */
-    private function handlePublishRequest(PublishRequestPacket $packet)
-    {
-        $response = null;
-        $emit = true;
-        if ($packet->getQosLevel() == 1) {
-            $response = new PublishAckPacket();
-        } elseif ($packet->getQosLevel() == 2) {
-            $response = new PublishReceivedPacket();
-            $this->incomingQos2[$packet->getIdentifier()] = $packet;
-            $emit = false;
         }
 
         if ($response !== null) {
-            $response->setIdentifier($packet->getIdentifier());
-            $this->writePacket($response);
-        }
-
-        if ($emit) {
-            $this->emitMessage($packet);
+            if ($this->stream->getBuffer()->listening) {
+                $this->sendingFlows[] = $flow;
+            } else {
+                $this->stream->write($response);
+                $this->writtenFlow = $flow;
+            }
+        } elseif ($flow->isFinished()) {
+            $this->loop->nextTick(function () use ($flow) {
+                $this->finishFlow($flow);
+            });
         }
     }
 
     /**
-     * Handles a PUBACK packet.
+     * Finishes the given flow.
      *
-     * @param PublishAckPacket $packet
+     * @param ReactFlow $flow
      */
-    private function handlePublishAck(PublishAckPacket $packet)
+    private function finishFlow(ReactFlow $flow)
     {
-        $id = $packet->getIdentifier();
-        if (!isset($this->publishQos1[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('PUBACK: Packet identifier %d not found.', $id)));
+        if ($flow->isSuccess()) {
+            $this->emit($flow->getCode(), [$flow->getResult(), $this]);
 
-            return;
+            $flow->getDeferred()->resolve($flow->getResult());
+        } else {
+            $result = new \RuntimeException($flow->getErrorMessage());
+            $this->emitWarning($result);
+
+            $flow->getDeferred()->reject($result);
         }
-
-        $this->deferred['publish'][$id]->resolve($this->publishQos1[$id]->getPayload());
-
-        unset($this->publishQos1[$id], $this->deferred['publish'][$id]);
-    }
-
-    /**
-     * Handles a PUBREC packet.
-     *
-     * @param PublishReceivedPacket $packet
-     */
-    private function handlePublishReceived(PublishReceivedPacket $packet)
-    {
-        $id = $packet->getIdentifier();
-        if (!isset($this->publishQos2[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('PUBREC: Packet identifier %d not found.', $id)));
-
-            return;
-        }
-
-        $response = new PublishReleasePacket();
-        $response->setIdentifier($id);
-        $this->writePacket($response);
-    }
-
-    /**
-     * Handles a PUBREL packet.
-     *
-     * @param PublishReleasePacket $packet
-     */
-    private function handlePublishRelease(PublishReleasePacket $packet)
-    {
-        $id = $packet->getIdentifier();
-
-        $response = new PublishCompletePacket();
-        $response->setIdentifier($id);
-        $this->writePacket($response);
-
-        if (!isset($this->incomingQos2[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('PUBREL: Packet identifier %d not found.', $id)));
-
-            return;
-        }
-
-        $this->emitMessage($this->incomingQos2[$id]);
-        unset($this->incomingQos2[$id]);
-    }
-
-    /**
-     * Handles a PUBCOMP packet.
-     *
-     * @param PublishCompletePacket $packet
-     */
-    private function handlePublishComplete(PublishCompletePacket $packet)
-    {
-        $id = $packet->getIdentifier();
-        if (!isset($this->publishQos2[$id])) {
-            $this->emitWarning(new \LogicException(sprintf('PUBCOMP: Packet identifier %d not found.', $id)));
-
-            return;
-        }
-
-        $this->deferred['publish'][$id]->resolve($this->publishQos2[$id]->getPayload());
-
-        unset($this->publishQos2[$id], $this->deferred['publish'][$id]);
     }
 }

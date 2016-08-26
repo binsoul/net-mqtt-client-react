@@ -22,67 +22,90 @@ Connect to a public broker and run forever.
 <?php
 
 use BinSoul\Net\Mqtt\Client\React\ReactMqttClient;
-use React\SocketClient\Connector;
+use BinSoul\Net\Mqtt\Connection;
+use BinSoul\Net\Mqtt\DefaultMessage;
+use BinSoul\Net\Mqtt\DefaultSubscription;
+use BinSoul\Net\Mqtt\Message;
+use BinSoul\Net\Mqtt\Subscription;
+use React\SocketClient\DnsConnector;
+use React\SocketClient\TcpConnector;
 
 include 'vendor/autoload.php';
 
 // Setup client
 $loop = React\EventLoop\Factory::create();
 $dnsResolverFactory = new React\Dns\Resolver\Factory();
-$connector = new Connector($loop, $dnsResolverFactory->createCached('8.8.8.8', $loop));
+$connector = new DnsConnector(new TcpConnector($loop), $dnsResolverFactory->createCached('8.8.8.8', $loop));
 $client = new ReactMqttClient($connector, $loop);
 
 // Bind to events
-$client->on('connect', function () {
-    echo "Connected.\n";
+$client->on('open', function () use ($client) {
+    // Network connection established
+    echo sprintf("Open: %s:%s\n", $client->getHost(), $client->getPort());
 });
 
-$client->on('disconnect', function () {
-    echo "Disconnected.\n";
+$client->on('close', function () use ($client, $loop) {
+    // Network connection closed
+    echo sprintf("Close: %s:%s\n", $client->getHost(), $client->getPort());
+
+    $loop->stop();
 });
 
-$client->on('message', function ($topic, $message, $isDuplicate, $isRetained) {
-    echo 'Incoming: '.$topic.' => '.mb_strimwidth($message, 0, 50, '...');
-    
-    if ($isDuplicate) {
+$client->on('connect', function (Connection $connection) {
+    // Broker connected
+    echo sprintf("Connect: client=%s\n", $connection->getClientID());
+});
+
+$client->on('disconnect', function (Connection $connection) {
+    // Broker disconnected
+    echo sprintf("Disconnect: client=%s\n", $connection->getClientID());
+});
+
+$client->on('message', function (Message $message) {
+    // Incoming message
+    echo 'Message';
+
+    if ($message->isDuplicate()) {
         echo ' (duplicate)';
     }
 
-    if ($isRetained) {
+    if ($message->isRetained()) {
         echo ' (retained)';
     }
 
+    echo ': '.$message->getTopic().' => '.mb_strimwidth($message->getPayload(), 0, 50, '...');
     echo "\n";
 });
 
 $client->on('warning', function (\Exception $e) {
-    echo $e->getMessage();
+    echo sprintf("Warning: %s\n", $e->getMessage());
 });
 
-$client->on('error', function (\Exception $e) {
-    echo $e->getMessage();
-    die();
+$client->on('error', function (\Exception $e) use ($loop) {
+    echo sprintf("Error: %s\n", $e->getMessage());
+
+    $loop->stop();
 });
 
 // Connect to broker
 $client->connect('test.mosquitto.org')->then(
-    function (ReactMqttClient $client) {
-        // Subscribe to all topics below "sensors"
-        $client->subscribe('sensors/#')
-            ->then(function ($topic) {
-                echo sprintf("Subscribed to topic '%s'.\n", $topic);
+    function () use ($client) {
+        // Subscribe to all topics
+        $client->subscribe(new DefaultSubscription('#'))
+            ->then(function (Subscription $subscription) {
+                echo sprintf("Subscribe: %s\n", $subscription->getFilter());
             })
             ->otherwise(function (\Exception $e) {
-                echo $e->getMessage();
+                echo sprintf("Error: %s\n", $e->getMessage());
             });
 
         // Publish humidity once
-        $client->publish('sensors/humidity', '55 %', 1)
-            ->then(function ($value) {
-                echo sprintf("Published message '%s'.\n", $value);
+        $client->publish(new DefaultMessage('sensors/humidity', '55%'))
+            ->then(function (Message $message) {
+                echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
             })
             ->otherwise(function (\Exception $e) {
-                echo $e->getMessage();
+                echo sprintf("Error: %s\n", $e->getMessage());
             });
 
         // Publish a random temperature every 10 seconds
@@ -90,12 +113,12 @@ $client->connect('test.mosquitto.org')->then(
             return mt_rand(-20, 30);
         };
 
-        $client->publishPeriodically(10, 'sensors/temperature', $generator, 1)
-            ->progress(function ($value) {
-                echo sprintf("Published message '%s'.\n", $value);
+        $client->publishPeriodically(10, new DefaultMessage('sensors/temperature'), $generator)
+            ->progress(function (Message $message) {
+                echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
             })
             ->otherwise(function (\Exception $e) {
-                echo $e->getMessage();
+                echo sprintf("Error: %s\n", $e->getMessage());
             });
     }
 );

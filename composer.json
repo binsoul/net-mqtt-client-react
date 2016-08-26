@@ -18,7 +18,7 @@
     ],
     "require": {
         "php": "~5.6|~7.0",
-        "binsoul/net-mqtt": "^0.1",
+        "binsoul/net-mqtt": "~0.2",
         "react/promise": "~2.0",
         "react/socket-client": "~0.5"
     },
