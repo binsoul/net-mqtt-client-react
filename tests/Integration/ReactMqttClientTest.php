@@ -13,9 +13,7 @@ use React\Dns\Resolver\Resolver;
 use React\EventLoop\Factory as EventLoopFactory;
 use React\Dns\Resolver\Factory as DNSResolverFactory;
 use React\EventLoop\LoopInterface;
-use React\SocketClient\DnsConnector;
-use React\SocketClient\SecureConnector;
-use React\SocketClient\TcpConnector;
+use React\Socket\Connector;
 
 /**
  * Tests the ReactMqttClient class.
@@ -40,7 +38,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      *
      * @var string
      */
-    const HOSTNAME = 'iot.eclipse.org';
+    const HOSTNAME = 'tls://iot.eclipse.org';
 
     /**
      * Port.
@@ -170,10 +168,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
      */
     private function buildClient($name = '', $isPrimary = true)
     {
-        $connector = new DnsConnector(new TcpConnector($this->loop), $this->resolver);
-        if (self::SECURE) {
-            $connector = new SecureConnector($connector, $this->loop);
-        }
+        $connector = new Connector($this->loop, ['timeout' => false]);
 
         $client = new ReactMqttClient($connector, $this->loop);
         if ($isPrimary) {

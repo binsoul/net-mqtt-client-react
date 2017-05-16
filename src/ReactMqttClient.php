@@ -26,8 +26,8 @@ use React\Promise\Deferred;
 use React\EventLoop\LoopInterface;
 use React\Promise\ExtendedPromiseInterface;
 use React\Promise\RejectedPromise;
-use React\SocketClient\ConnectorInterface;
-use React\Stream\Stream;
+use React\Socket\ConnectorInterface;
+use React\Stream\DuplexStreamInterface;
 
 /**
  * Connects to a MQTT broker and subscribes to topics or publishes messages.
@@ -52,7 +52,7 @@ class ReactMqttClient extends EventEmitter
     private $connector;
     /** @var LoopInterface */
     private $loop;
-    /** @var Stream */
+    /** @var DuplexStreamInterface */
     private $stream;
     /** @var StreamParser */
     private $parser;
@@ -147,7 +147,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Returns the underlying stream or null if the client is not connected.
      *
-     * @return Stream|null
+     * @return DuplexStreamInterface|null
      */
     public function getStream()
     {
@@ -187,7 +187,7 @@ class ReactMqttClient extends EventEmitter
         $deferred = new Deferred();
 
         $this->establishConnection($this->host, $this->port, $timeout)
-            ->then(function (Stream $stream) use ($connection, $deferred, $timeout) {
+            ->then(function (DuplexStreamInterface $stream) use ($connection, $deferred, $timeout) {
                 $this->stream = $stream;
 
                 $this->emit('open', [$connection, $this]);
@@ -377,17 +377,13 @@ class ReactMqttClient extends EventEmitter
             }
         );
 
-        $this->connector->create($host, $port)
+        $this->connector->connect($host.':'.$port)
             ->always(function () use ($timer) {
                 $this->loop->cancelTimer($timer);
             })
-            ->then(function (Stream $stream) use ($deferred, $timeout) {
+            ->then(function (DuplexStreamInterface $stream) use ($deferred) {
                 $stream->on('data', function ($data) {
                     $this->handleReceive($data);
-                });
-
-                $stream->getBuffer()->on('full-drain', function () {
-                    $this->handleSend();
                 });
 
                 $stream->on('close', function () {
@@ -467,6 +463,8 @@ class ReactMqttClient extends EventEmitter
         if ($flowCount > count($this->receivingFlows)) {
             $this->receivingFlows = array_values($this->receivingFlows);
         }
+
+        $this->handleSend();
     }
 
     /**
@@ -603,11 +601,12 @@ class ReactMqttClient extends EventEmitter
         $internalFlow = new ReactFlow($flow, $deferred, $packet, $isSilent);
 
         if ($packet !== null) {
-            if ($this->stream->getBuffer()->listening) {
+            if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $internalFlow;
             } else {
                 $this->stream->write($packet);
                 $this->writtenFlow = $internalFlow;
+                $this->handleSend();
             }
         } else {
             $this->loop->nextTick(function () use ($internalFlow) {
@@ -635,11 +634,12 @@ class ReactMqttClient extends EventEmitter
         }
 
         if ($response !== null) {
-            if ($this->stream->getBuffer()->listening) {
+            if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $flow;
             } else {
                 $this->stream->write($response);
                 $this->writtenFlow = $flow;
+                $this->handleSend();
             }
         } elseif ($flow->isFinished()) {
             $this->loop->nextTick(function () use ($flow) {
