@@ -207,7 +207,10 @@ class ReactMqttClient extends EventEmitter
                         $this->emitError($e);
                         $deferred->reject($e);
 
-                        $this->stream->close();
+                        if ($this->stream !== null) {
+                            $this->stream->close();
+                        }
+
                         $this->emit('close', [$connection, $this]);
                     });
             })
@@ -244,7 +247,9 @@ class ReactMqttClient extends EventEmitter
                 $this->emit('disconnect', [$connection, $this]);
                 $deferred->resolve($connection);
 
-                $this->stream->close();
+                if ($this->stream !== null) {
+                    $this->stream->close();
+                }
             })
             ->otherwise(function () use ($deferred) {
                 $this->isDisconnecting = false;
