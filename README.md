@@ -4,8 +4,8 @@
 [![Software License][ico-license]](LICENSE.md)
 [![Total Downloads][ico-downloads]][link-downloads]
 
-This package provides an asynchronous MQTT client built on the [React socket client](https://github.com/reactphp/socket-client). All client methods return a promise which is fulfilled if the operation succeeded or rejected if the operation failed. Incoming messages of subscribed topics are delivered via the "message" event.
- 
+This package provides an asynchronous MQTT client built on the [React socket](https://github.com/reactphp/socket) library. All client methods return a promise which is fulfilled if the operation succeeded or rejected if the operation failed. Incoming messages of subscribed topics are delivered via the "message" event.
+
 ## Install
 
 Via composer:
@@ -27,14 +27,14 @@ use BinSoul\Net\Mqtt\DefaultMessage;
 use BinSoul\Net\Mqtt\DefaultSubscription;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
-use React\SocketClient\DnsConnector;
-use React\SocketClient\TcpConnector;
+use React\Socket\DnsConnector;
+use React\Socket\TcpConnector;
 
 include 'vendor/autoload.php';
 
 // Setup client
-$loop = React\EventLoop\Factory::create();
-$dnsResolverFactory = new React\Dns\Resolver\Factory();
+$loop = \React\EventLoop\Factory::create();
+$dnsResolverFactory = new \React\Dns\Resolver\Factory();
 $connector = new DnsConnector(new TcpConnector($loop), $dnsResolverFactory->createCached('8.8.8.8', $loop));
 $client = new ReactMqttClient($connector, $loop);
 
