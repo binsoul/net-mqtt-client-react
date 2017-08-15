@@ -170,6 +170,10 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new \LogicException('The client is already connected.'));
         }
 
+        if ($connection->isCleanSession()) {
+            $this->cleanPreviousSession();
+        }
+
         $this->isConnecting = true;
         $this->isConnected = false;
 
@@ -560,6 +564,7 @@ class ReactMqttClient extends EventEmitter
         foreach ($this->timer as $timer) {
             $this->loop->cancelTimer($timer);
         }
+        $this->timer = [];
 
         $connection = $this->connection;
 
@@ -672,5 +677,23 @@ class ReactMqttClient extends EventEmitter
 
             $flow->getDeferred()->reject($result);
         }
+    }
+
+    /**
+     * Cleans previous session by rejecting all pending flows.
+     */
+    private function cleanPreviousSession()
+    {
+        $error = new \RuntimeException('Connection has been closed.');
+
+        foreach ($this->receivingFlows as $receivingFlow) {
+            $receivingFlow->getDeferred()->reject($error);
+        }
+        $this->receivingFlows = [];
+
+        foreach ($this->sendingFlows as $sendingFlow) {
+            $sendingFlow->getDeferred()->reject($error);
+        }
+        $this->sendingFlows = [];
     }
 }
