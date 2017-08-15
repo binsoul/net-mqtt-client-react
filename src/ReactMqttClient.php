@@ -562,7 +562,16 @@ class ReactMqttClient extends EventEmitter
         }
         $this->timer = [];
 
+        $error = new \RuntimeException('Connection has been closed.');
+
+        foreach ($this->receivingFlows as $receivingFlow) {
+            $receivingFlow->getDeferred()->reject($error);
+        }
         $this->receivingFlows = [];
+
+        foreach ($this->sendingFlows as $sendingFlow) {
+            $sendingFlow->getDeferred()->reject($error);
+        }
         $this->sendingFlows = [];
 
         $connection = $this->connection;
