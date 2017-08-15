@@ -560,6 +560,10 @@ class ReactMqttClient extends EventEmitter
         foreach ($this->timer as $timer) {
             $this->loop->cancelTimer($timer);
         }
+        $this->timer = [];
+
+        $this->receivingFlows = [];
+        $this->sendingFlows = [];
 
         $connection = $this->connection;
 
