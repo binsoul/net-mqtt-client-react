@@ -180,6 +180,10 @@ class ReactMqttClient extends EventEmitter
             $connection = new DefaultConnection();
         }
 
+        if ($connection->isCleanSession()) {
+            $this->cleanPreviousSession();
+        }
+
         if ($connection->getClientID() === '') {
             $connection = $connection->withClientID($this->identifierGenerator->generateClientID());
         }
@@ -561,6 +565,8 @@ class ReactMqttClient extends EventEmitter
             $this->loop->cancelTimer($timer);
         }
 
+        $this->timer = [];
+
         $connection = $this->connection;
 
         $this->isConnecting = false;
@@ -672,5 +678,24 @@ class ReactMqttClient extends EventEmitter
 
             $flow->getDeferred()->reject($result);
         }
+    }
+
+    /**
+     * Cleans previous session by rejecting all pending flows.
+     */
+    private function cleanPreviousSession()
+    {
+        $error = new \RuntimeException('Connection has been closed.');
+
+        foreach ($this->receivingFlows as $receivingFlow) {
+            $receivingFlow->getDeferred()->reject($error);
+        }
+
+        foreach ($this->sendingFlows as $sendingFlow) {
+            $sendingFlow->getDeferred()->reject($error);
+        }
+
+        $this->receivingFlows = [];
+        $this->sendingFlows = [];
     }
 }
