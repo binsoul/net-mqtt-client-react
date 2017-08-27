@@ -196,12 +196,12 @@ class ReactMqttClient extends EventEmitter
                 $this->emit('open', [$connection, $this]);
 
                 $this->registerClient($connection, $timeout)
-                    ->then(function (Connection $connection) use ($deferred) {
+                    ->then(function ($result = null) use ($deferred, $connection) {
                         $this->isConnecting = false;
                         $this->isConnected = true;
                         $this->connection = $connection;
 
-                        $this->emit('connect', [$connection, $this]);
+                        $this->emit('connect', [$connection, $this, $result]);
                         $deferred->resolve($this->connection);
                     })
                     ->otherwise(function (\Exception $e) use ($deferred, $connection) {
@@ -238,8 +238,9 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
+        $connection = $this->connection;
         try {
-            $flow = $this->flowFactory->build(Flow::CODE_DISCONNECT, $this->connection);
+            $flow = $this->flowFactory->build(Flow::CODE_DISCONNECT, $connection);
         } catch (\Exception $e) {
             return new RejectedPromise($e);
         }
@@ -249,11 +250,11 @@ class ReactMqttClient extends EventEmitter
         $deferred = new Deferred();
 
         $this->startFlow($flow, true)
-            ->then(function (Connection $connection) use ($deferred) {
+            ->then(function ($result = null) use ($deferred, $connection) {
                 $this->isDisconnecting = false;
                 $this->isConnected = false;
 
-                $this->emit('disconnect', [$connection, $this]);
+                $this->emit('disconnect', [$connection, $this, $result]);
                 $deferred->resolve($connection);
 
                 if ($this->stream !== null) {
@@ -464,7 +465,7 @@ class ReactMqttClient extends EventEmitter
         $this->startFlow($flow, true)
             ->always(function () use ($responseTimer) {
                 $this->loop->cancelTimer($responseTimer);
-            })->then(function (Connection $connection) use ($deferred) {
+            })->then(function ($result = null) use ($deferred, $connection) {
                 $this->timer[] = $this->loop->addPeriodicTimer(
                     floor($connection->getKeepAlive() * 0.75),
                     function () {
@@ -477,7 +478,7 @@ class ReactMqttClient extends EventEmitter
                     }
                 );
 
-                $deferred->resolve($connection);
+                $deferred->resolve($result);
             })->otherwise(function (\Exception $e) use ($deferred) {
                 $deferred->reject($e);
             });
