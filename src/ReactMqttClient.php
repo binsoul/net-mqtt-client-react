@@ -52,7 +52,7 @@ class ReactMqttClient extends EventEmitter
     private $connector;
     /** @var LoopInterface */
     private $loop;
-    /** @var DuplexStreamInterface */
+    /** @var DuplexStreamInterface|null */
     private $stream;
     /** @var StreamParser */
     private $parser;
@@ -63,7 +63,7 @@ class ReactMqttClient extends EventEmitter
     private $host;
     /** @var int */
     private $port;
-    /** @var Connection */
+    /** @var Connection|null */
     private $connection;
     /** @var bool */
     private $isConnected = false;
@@ -71,7 +71,7 @@ class ReactMqttClient extends EventEmitter
     private $isConnecting = false;
     /** @var bool */
     private $isDisconnecting = false;
-    /** @var callable */
+    /** @var callable|null */
     private $onCloseCallback;
 
 
@@ -82,7 +82,7 @@ class ReactMqttClient extends EventEmitter
     private $receivingFlows = [];
     /** @var ReactFlow[] */
     private $sendingFlows = [];
-    /** @var ReactFlow */
+    /** @var ReactFlow|null */
     private $writtenFlow;
 
     /**
@@ -130,7 +130,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Return the port.
      *
-     * @return string
+     * @return int
      */
     public function getPort()
     {
@@ -364,6 +364,8 @@ class ReactMqttClient extends EventEmitter
      * Emits warnings.
      *
      * @param \Exception $e
+     *
+     * @return void
      */
     private function emitWarning(\Exception $e)
     {
@@ -374,6 +376,8 @@ class ReactMqttClient extends EventEmitter
      * Emits errors.
      *
      * @param \Exception $e
+     *
+     * @return void
      */
     private function emitError(\Exception $e)
     {
@@ -470,6 +474,8 @@ class ReactMqttClient extends EventEmitter
      * Handles incoming data.
      *
      * @param string $data
+     *
+     * @return void
      */
     private function handleReceive($data)
     {
@@ -495,12 +501,17 @@ class ReactMqttClient extends EventEmitter
      * Handles an incoming packet.
      *
      * @param Packet $packet
+     *
+     * @return void
      */
     private function handlePacket(Packet $packet)
     {
         switch ($packet->getPacketType()) {
             case Packet::TYPE_PUBLISH:
-                /* @var PublishRequestPacket $packet */
+                if (!($packet instanceof PublishRequestPacket)) {
+                    throw new \RuntimeException(sprintf('Expected %s but got %s.', PublishRequestPacket::class, get_class($packet)));
+                }
+
                 $message = new DefaultMessage(
                     $packet->getTopic(),
                     $packet->getPayload(),
@@ -546,6 +557,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles outgoing packets.
+     *
+     * @return void
      */
     private function handleSend()
     {
@@ -573,6 +586,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles closing of the stream.
+     *
+     * @return void
      */
     private function handleClose()
     {
@@ -602,6 +617,8 @@ class ReactMqttClient extends EventEmitter
      * Handles errors of the stream.
      *
      * @param \Exception $e
+     *
+     * @return void
      */
     private function handleError(\Exception $e)
     {
@@ -651,6 +668,8 @@ class ReactMqttClient extends EventEmitter
      *
      * @param ReactFlow $flow
      * @param Packet    $packet
+     *
+     * @return void
      */
     private function continueFlow(ReactFlow $flow, Packet $packet)
     {
@@ -681,6 +700,8 @@ class ReactMqttClient extends EventEmitter
      * Finishes the given flow.
      *
      * @param ReactFlow $flow
+     *
+     * @return void
      */
     private function finishFlow(ReactFlow $flow)
     {
