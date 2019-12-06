@@ -543,7 +543,7 @@ class ReactMqttClient extends EventEmitter
 
         if ($flow !== null) {
             if ($flow->isFinished()) {
-                $this->loop->nextTick(function () use ($flow) {
+                $this->loop->futureTick(function () use ($flow) {
                     $this->finishFlow($flow);
                 });
             } else {
@@ -614,7 +614,7 @@ class ReactMqttClient extends EventEmitter
                 $this->handleSend();
             }
         } else {
-            $this->loop->nextTick(function () use ($internalFlow) {
+            $this->loop->futureTick(function () use ($internalFlow) {
                 $this->finishFlow($internalFlow);
             });
         }
@@ -647,7 +647,7 @@ class ReactMqttClient extends EventEmitter
                 $this->handleSend();
             }
         } elseif ($flow->isFinished()) {
-            $this->loop->nextTick(function () use ($flow) {
+            $this->loop->futureTick(function () use ($flow) {
                 $this->finishFlow($flow);
             });
         }
