@@ -9,6 +9,7 @@ use BinSoul\Net\Mqtt\DefaultMessage;
 use BinSoul\Net\Mqtt\DefaultSubscription;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
+use PHPUnit\Framework\TestCase;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\Factory as EventLoopFactory;
 use React\Dns\Resolver\Factory as DNSResolverFactory;
@@ -22,7 +23,7 @@ use React\Socket\Connector;
  *
  * @author  Alin Eugen Deac <ade@vestergaardcompany.com>
  */
-class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
+class ReactMqttClientTest extends TestCase
 {
     /**
      * Nameserver.
@@ -88,7 +89,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     /**
      * {@inheritdoc}
      */
-    public function setUp()
+    protected function setUp(): void
     {
         // Create event loop
         $this->loop = EventLoopFactory::create();
@@ -108,7 +109,7 @@ class ReactMqttClientTest extends \PHPUnit_Framework_TestCase
     /**
      * {@inheritdoc}
      */
-    public function tearDown()
+    protected function tearDown(): void
     {
         $this->loop->stop();
 
