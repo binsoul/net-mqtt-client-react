@@ -41,12 +41,12 @@ $client = new ReactMqttClient($connector, $loop);
 // Bind to events
 $client->on('open', function () use ($client) {
     // Network connection established
-    echo sprintf("Open: %s:%s\n", $client->getHost(), $client->getPort());
+    echo sprintf("Open: %s:%d\n", $client->getHost(), $client->getPort());
 });
 
 $client->on('close', function () use ($client, $loop) {
     // Network connection closed
-    echo sprintf("Close: %s:%s\n", $client->getHost(), $client->getPort());
+    echo sprintf("Close: %s:%d\n", $client->getHost(), $client->getPort());
 
     $loop->stop();
 });
