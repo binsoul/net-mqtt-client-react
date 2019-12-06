@@ -5,6 +5,7 @@ namespace BinSoul\Net\Mqtt\Client\React;
 use BinSoul\Net\Mqtt\Connection;
 use BinSoul\Net\Mqtt\DefaultConnection;
 use BinSoul\Net\Mqtt\DefaultIdentifierGenerator;
+use BinSoul\Net\Mqtt\DefaultMessage;
 use BinSoul\Net\Mqtt\Flow;
 use BinSoul\Net\Mqtt\Flow\IncomingPublishFlow;
 use BinSoul\Net\Mqtt\Flow\OutgoingConnectFlow;
@@ -13,7 +14,6 @@ use BinSoul\Net\Mqtt\Flow\OutgoingPingFlow;
 use BinSoul\Net\Mqtt\Flow\OutgoingPublishFlow;
 use BinSoul\Net\Mqtt\Flow\OutgoingSubscribeFlow;
 use BinSoul\Net\Mqtt\Flow\OutgoingUnsubscribeFlow;
-use BinSoul\Net\Mqtt\DefaultMessage;
 use BinSoul\Net\Mqtt\IdentifierGenerator;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Packet;
@@ -21,9 +21,9 @@ use BinSoul\Net\Mqtt\Packet\PublishRequestPacket;
 use BinSoul\Net\Mqtt\StreamParser;
 use BinSoul\Net\Mqtt\Subscription;
 use Evenement\EventEmitter;
-use React\EventLoop\Timer\TimerInterface;
-use React\Promise\Deferred;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
 use React\Promise\ExtendedPromiseInterface;
 use React\Promise\RejectedPromise;
 use React\Socket\ConnectorInterface;
@@ -73,7 +73,6 @@ class ReactMqttClient extends EventEmitter
     private $isDisconnecting = false;
     /** @var callable|null */
     private $onCloseCallback;
-
 
     /** @var TimerInterface[] */
     private $timer = [];
@@ -231,6 +230,7 @@ class ReactMqttClient extends EventEmitter
      * Disconnects from a broker.
      *
      * @param int $timeout
+     *
      * @return ExtendedPromiseInterface
      */
     public function disconnect($timeout = 5)

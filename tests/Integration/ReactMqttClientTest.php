@@ -10,9 +10,9 @@ use BinSoul\Net\Mqtt\DefaultSubscription;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
 use PHPUnit\Framework\TestCase;
+use React\Dns\Resolver\Factory as DNSResolverFactory;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\Factory as EventLoopFactory;
-use React\Dns\Resolver\Factory as DNSResolverFactory;
 use React\EventLoop\LoopInterface;
 use React\Socket\Connector;
 
@@ -83,12 +83,12 @@ class ReactMqttClientTest extends TestCase
      * @var Resolver
      */
     private $resolver;
-    /** @var ReactMqttClient */
-    private $client;
 
     /**
-     * {@inheritdoc}
+     * @var ReactMqttClient
      */
+    private $client;
+
     protected function setUp(): void
     {
         // Create event loop
@@ -106,9 +106,6 @@ class ReactMqttClientTest extends TestCase
         echo 'Test: '.str_replace(['test_', '_'], ['', ' '], $this->getName()).PHP_EOL.PHP_EOL;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function tearDown(): void
     {
         $this->loop->stop();
