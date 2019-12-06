@@ -71,6 +71,9 @@ class ReactMqttClient extends EventEmitter
     private $isConnecting = false;
     /** @var bool */
     private $isDisconnecting = false;
+    /** @var callable */
+    private $onCloseCallback;
+
 
     /** @var TimerInterface[] */
     private $timer = [];
@@ -227,9 +230,10 @@ class ReactMqttClient extends EventEmitter
     /**
      * Disconnects from a broker.
      *
+     * @param int $timeout
      * @return ExtendedPromiseInterface
      */
-    public function disconnect()
+    public function disconnect($timeout = 5)
     {
         if (!$this->isConnected || $this->isDisconnecting) {
             return new RejectedPromise(new \LogicException('The client is not connected.'));
@@ -239,21 +243,36 @@ class ReactMqttClient extends EventEmitter
 
         $deferred = new Deferred();
 
-        $this->startFlow(new OutgoingDisconnectFlow($this->connection), true)
-            ->then(function (Connection $connection) use ($deferred) {
-                $this->isDisconnecting = false;
-                $this->isConnected = false;
+        $isResolved = false;
 
-                $this->emit('disconnect', [$connection, $this]);
-                $deferred->resolve($connection);
+        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved) {
+            if (!$isResolved) {
+                $isResolved = true;
 
-                if ($this->stream !== null) {
-                    $this->stream->close();
+                if ($connection) {
+                    $this->emit('disconnect', [$connection, $this]);
+                    $deferred->resolve($connection);
                 }
+            }
+        };
+
+        $this->startFlow(new OutgoingDisconnectFlow($this->connection), true)
+            ->then(function () use ($timeout) {
+                $this->timer[] = $this->loop->addTimer(
+                    $timeout,
+                    function () {
+                        if ($this->stream !== null) {
+                            $this->stream->close();
+                        }
+                    }
+                );
             })
-            ->otherwise(function () use ($deferred) {
-                $this->isDisconnecting = false;
-                $deferred->reject($this->connection);
+            ->otherwise(function () use ($deferred, &$isResolved) {
+                if (!$isResolved) {
+                    $isResolved = true;
+                    $this->isDisconnecting = false;
+                    $deferred->reject($this->connection);
+                }
             });
 
         return $deferred->promise();
@@ -568,6 +587,11 @@ class ReactMqttClient extends EventEmitter
         $this->isConnected = false;
         $this->connection = null;
         $this->stream = null;
+
+        if ($this->onCloseCallback !== null) {
+            call_user_func($this->onCloseCallback, $connection);
+            $this->onCloseCallback = null;
+        }
 
         if ($connection !== null) {
             $this->emit('close', [$connection, $this]);
