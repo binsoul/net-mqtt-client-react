@@ -39,7 +39,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var string
      */
-    const HOSTNAME = 'tls://iot.eclipse.org';
+    const HOSTNAME = 'mqtt.eclipse.org';
 
     /**
      * Port.
@@ -49,7 +49,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var int
      */
-    const PORT = 8883;
+    const PORT = 1883;
 
     /**
      * @var bool
