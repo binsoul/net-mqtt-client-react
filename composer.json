@@ -24,7 +24,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^8",
-        "friendsofphp/php-cs-fixer": "~1.0"
+        "friendsofphp/php-cs-fixer": "^2",
+        "phpstan/phpstan": "^0.12"
     },
     "autoload": {
         "psr-4": {
@@ -34,14 +35,18 @@
     "autoload-dev": {
         "psr-4": {
             "BinSoul\\Test\\Net\\Mqtt\\Client\\React\\": "tests"
-        }
+        },
+        "exclude-from-classmap": [
+            "/tests/"
+        ]
     },
     "scripts": {
         "test": "phpunit",
         "fix-style": [
-            "php-cs-fixer fix src",
-            "php-cs-fixer fix tests"
-        ]
+            "php-cs-fixer fix src --rules=@Symfony,-yoda_style,-no_superfluous_phpdoc_tags",
+            "php-cs-fixer fix tests --rules=@Symfony,-yoda_style,-no_superfluous_phpdoc_tags"
+        ],
+        "analyze": "phpstan analyse -l 7 src"
     },
     "extra": {
         "branch-alias": {
