@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace BinSoul\Net\Mqtt\Client\React;
 
 use BinSoul\Net\Mqtt\Flow;
@@ -15,7 +17,7 @@ class ReactFlow implements Flow
     private $decorated;
     /** @var Deferred */
     private $deferred;
-    /** @var Packet */
+    /** @var Packet|null */
     private $packet;
     /** @var bool */
     private $isSilent;
@@ -28,7 +30,7 @@ class ReactFlow implements Flow
      * @param Packet   $packet
      * @param bool     $isSilent
      */
-    public function __construct(Flow $decorated, Deferred $deferred, Packet $packet = null, $isSilent = false)
+    public function __construct(Flow $decorated, Deferred $deferred, Packet $packet = null, bool $isSilent = false)
     {
         $this->decorated = $decorated;
         $this->deferred = $deferred;
@@ -36,7 +38,7 @@ class ReactFlow implements Flow
         $this->isSilent = $isSilent;
     }
 
-    public function getCode()
+    public function getCode(): string
     {
         return $this->decorated->getCode();
     }
@@ -48,7 +50,7 @@ class ReactFlow implements Flow
         return $this->packet;
     }
 
-    public function accept(Packet $packet)
+    public function accept(Packet $packet): bool
     {
         return $this->decorated->accept($packet);
     }
@@ -60,12 +62,12 @@ class ReactFlow implements Flow
         return $this->packet;
     }
 
-    public function isFinished()
+    public function isFinished(): bool
     {
         return $this->decorated->isFinished();
     }
 
-    public function isSuccess()
+    public function isSuccess(): bool
     {
         return $this->decorated->isSuccess();
     }
@@ -75,7 +77,7 @@ class ReactFlow implements Flow
         return $this->decorated->getResult();
     }
 
-    public function getErrorMessage()
+    public function getErrorMessage(): string
     {
         return $this->decorated->getErrorMessage();
     }
@@ -85,7 +87,7 @@ class ReactFlow implements Flow
      *
      * @return Deferred
      */
-    public function getDeferred()
+    public function getDeferred(): Deferred
     {
         return $this->deferred;
     }
@@ -93,7 +95,7 @@ class ReactFlow implements Flow
     /**
      * Returns the current packet.
      *
-     * @return Packet
+     * @return Packet|null
      */
     public function getPacket()
     {
@@ -105,7 +107,7 @@ class ReactFlow implements Flow
      *
      * @return bool
      */
-    public function isSilent()
+    public function isSilent(): bool
     {
         return $this->isSilent;
     }
