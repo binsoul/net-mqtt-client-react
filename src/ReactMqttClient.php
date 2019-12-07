@@ -202,15 +202,15 @@ class ReactMqttClient extends EventEmitter
                 $this->emit('open', [$connection, $this]);
 
                 $this->registerClient($connection, $timeout)
-                    ->then(function (Connection $connection) use ($deferred) {
+                    ->then(function ($result) use ($connection, $deferred) {
                         $this->isConnecting = false;
                         $this->isConnected = true;
                         $this->connection = $connection;
 
                         $this->emit('connect', [$connection, $this]);
-                        $deferred->resolve($this->connection);
+                        $deferred->resolve($result ?: $connection);
                     })
-                    ->otherwise(function (\Exception $e) use ($deferred, $connection) {
+                    ->otherwise(function (\Exception $e) use ($connection, $deferred) {
                         $this->isConnecting = false;
 
                         $this->emitError($e);
@@ -251,20 +251,24 @@ class ReactMqttClient extends EventEmitter
         $deferred = new Deferred();
 
         $isResolved = false;
+        $flowResult = null;
 
-        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved) {
+        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved, &$flowResult) {
             if (!$isResolved) {
                 $isResolved = true;
 
                 if ($connection) {
                     $this->emit('disconnect', [$connection, $this]);
-                    $deferred->resolve($connection);
                 }
+
+                $deferred->resolve($flowResult ?: $connection);
             }
         };
 
         $this->startFlow($this->flowFactory->buildOutgoingDisconnectFlow($this->connection), true)
-            ->then(function () use ($timeout) {
+            ->then(function ($result) use ($timeout, &$flowResult) {
+                $flowResult = $result;
+
                 $this->timer[] = $this->loop->addTimer(
                     $timeout,
                     function () {
@@ -274,11 +278,11 @@ class ReactMqttClient extends EventEmitter
                     }
                 );
             })
-            ->otherwise(function () use ($deferred, &$isResolved) {
+            ->otherwise(function ($exception) use ($deferred, &$isResolved) {
                 if (!$isResolved) {
                     $isResolved = true;
                     $this->isDisconnecting = false;
-                    $deferred->reject($this->connection);
+                    $deferred->reject($exception);
                 }
             });
 
@@ -461,7 +465,7 @@ class ReactMqttClient extends EventEmitter
         $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true)
             ->always(function () use ($responseTimer) {
                 $this->loop->cancelTimer($responseTimer);
-            })->then(function (Connection $connection) use ($deferred) {
+            })->then(function ($result) use ($connection, $deferred) {
                 $this->timer[] = $this->loop->addPeriodicTimer(
                     floor($connection->getKeepAlive() * 0.75),
                     function () {
@@ -469,7 +473,7 @@ class ReactMqttClient extends EventEmitter
                     }
                 );
 
-                $deferred->resolve($connection);
+                $deferred->resolve($result ?: $connection);
             })->otherwise(function (\Exception $e) use ($deferred) {
                 $deferred->reject($e);
             });
