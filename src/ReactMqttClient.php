@@ -2,19 +2,15 @@
 
 namespace BinSoul\Net\Mqtt\Client\React;
 
+use BinSoul\Net\Mqtt\ClientIdentifierGenerator;
 use BinSoul\Net\Mqtt\Connection;
 use BinSoul\Net\Mqtt\DefaultConnection;
+use BinSoul\Net\Mqtt\DefaultFlowFactory;
 use BinSoul\Net\Mqtt\DefaultIdentifierGenerator;
 use BinSoul\Net\Mqtt\DefaultMessage;
+use BinSoul\Net\Mqtt\DefaultPacketFactory;
 use BinSoul\Net\Mqtt\Flow;
-use BinSoul\Net\Mqtt\Flow\IncomingPublishFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingConnectFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingDisconnectFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingPingFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingPublishFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingSubscribeFlow;
-use BinSoul\Net\Mqtt\Flow\OutgoingUnsubscribeFlow;
-use BinSoul\Net\Mqtt\IdentifierGenerator;
+use BinSoul\Net\Mqtt\FlowFactory;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Packet;
 use BinSoul\Net\Mqtt\Packet\PublishRequestPacket;
@@ -56,7 +52,7 @@ class ReactMqttClient extends EventEmitter
     private $stream;
     /** @var StreamParser */
     private $parser;
-    /** @var IdentifierGenerator */
+    /** @var ClientIdentifierGenerator */
     private $identifierGenerator;
 
     /** @var string */
@@ -83,19 +79,25 @@ class ReactMqttClient extends EventEmitter
     private $sendingFlows = [];
     /** @var ReactFlow|null */
     private $writtenFlow;
+    /**
+     * @var FlowFactory|null
+     */
+    private $flowFactory;
 
     /**
      * Constructs an instance of this class.
      *
-     * @param ConnectorInterface  $connector
-     * @param LoopInterface       $loop
-     * @param IdentifierGenerator $identifierGenerator
-     * @param StreamParser        $parser
+     * @param ConnectorInterface $connector
+     * @param LoopInterface $loop
+     * @param ClientIdentifierGenerator|null $identifierGenerator
+     * @param FlowFactory|null $flowFactory
+     * @param StreamParser|null $parser
      */
     public function __construct(
         ConnectorInterface $connector,
         LoopInterface $loop,
-        IdentifierGenerator $identifierGenerator = null,
+        ClientIdentifierGenerator $identifierGenerator = null,
+        FlowFactory $flowFactory = null,
         StreamParser $parser = null
     ) {
         $this->connector = $connector;
@@ -103,7 +105,7 @@ class ReactMqttClient extends EventEmitter
 
         $this->parser = $parser;
         if ($this->parser === null) {
-            $this->parser = new StreamParser();
+            $this->parser = new StreamParser(new DefaultPacketFactory());
         }
 
         $this->parser->onError(function (\Exception $e) {
@@ -113,6 +115,11 @@ class ReactMqttClient extends EventEmitter
         $this->identifierGenerator = $identifierGenerator;
         if ($this->identifierGenerator === null) {
             $this->identifierGenerator = new DefaultIdentifierGenerator();
+        }
+
+        $this->flowFactory = $flowFactory;
+        if ($this->flowFactory === null) {
+            $this->flowFactory = new DefaultFlowFactory($this->identifierGenerator, new DefaultIdentifierGenerator(), new DefaultPacketFactory());
         }
     }
 
@@ -183,7 +190,7 @@ class ReactMqttClient extends EventEmitter
         }
 
         if ($connection->getClientID() === '') {
-            $connection = $connection->withClientID($this->identifierGenerator->generateClientID());
+            $connection = $connection->withClientID($this->identifierGenerator->generateClientIdentifier());
         }
 
         $deferred = new Deferred();
@@ -256,7 +263,7 @@ class ReactMqttClient extends EventEmitter
             }
         };
 
-        $this->startFlow(new OutgoingDisconnectFlow($this->connection), true)
+        $this->startFlow($this->flowFactory->buildOutgoingDisconnectFlow($this->connection), true)
             ->then(function () use ($timeout) {
                 $this->timer[] = $this->loop->addTimer(
                     $timeout,
@@ -291,7 +298,7 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow(new OutgoingSubscribeFlow([$subscription], $this->identifierGenerator));
+        return $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]));
     }
 
     /**
@@ -307,7 +314,7 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow(new OutgoingUnsubscribeFlow([$subscription], $this->identifierGenerator));
+        return $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]));
     }
 
     /**
@@ -323,7 +330,7 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new \LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow(new OutgoingPublishFlow($message, $this->identifierGenerator));
+        return $this->startFlow($this->flowFactory->buildOutgoingPublishFlow($message));
     }
 
     /**
@@ -451,14 +458,14 @@ class ReactMqttClient extends EventEmitter
             }
         );
 
-        $this->startFlow(new OutgoingConnectFlow($connection, $this->identifierGenerator), true)
+        $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true)
             ->always(function () use ($responseTimer) {
                 $this->loop->cancelTimer($responseTimer);
             })->then(function (Connection $connection) use ($deferred) {
                 $this->timer[] = $this->loop->addPeriodicTimer(
                     floor($connection->getKeepAlive() * 0.75),
                     function () {
-                        $this->startFlow(new OutgoingPingFlow());
+                        $this->startFlow($this->flowFactory->buildOutgoingPingFlow());
                     }
                 );
 
@@ -520,7 +527,7 @@ class ReactMqttClient extends EventEmitter
                     $packet->isDuplicate()
                 );
 
-                $this->startFlow(new IncomingPublishFlow($message, $packet->getIdentifier()));
+                $this->startFlow($this->flowFactory->buildIncomingPublishFlow($message, $packet->getIdentifier()));
                 break;
             case Packet::TYPE_CONNACK:
             case Packet::TYPE_PINGRESP:
