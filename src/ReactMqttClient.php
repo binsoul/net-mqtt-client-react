@@ -21,6 +21,7 @@ use BinSoul\Net\Mqtt\Subscription;
 use Evenement\EventEmitter;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use React\Promise\CancellablePromiseInterface;
 use React\Promise\Deferred;
 use React\Promise\ExtendedPromiseInterface;
 use React\Promise\RejectedPromise;
@@ -411,15 +412,20 @@ class ReactMqttClient extends EventEmitter
     {
         $deferred = new Deferred();
 
+        $future = null;
         $timer = $this->loop->addTimer(
             $timeout,
-            static function () use ($deferred, $timeout) {
+            static function () use ($deferred, $timeout, &$future) {
                 $exception = new \RuntimeException(sprintf('Connection timed out after %d seconds.', $timeout));
                 $deferred->reject($exception);
+                if ($future instanceof CancellablePromiseInterface) {
+                    $future->cancel();
+                }
+                $future = null;
             }
         );
 
-        $this->connector->connect($host.':'.$port)
+        $future = $this->connector->connect($host.':'.$port)
             ->always(function () use ($timer) {
                 $this->loop->cancelTimer($timer);
             })
