@@ -325,7 +325,17 @@ class ReactMqttClient extends EventEmitter
             return new RejectedPromise(new LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]));
+        $deferred = new Deferred();
+
+        $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]))
+            ->then(static function (array $subscriptions) use ($deferred) {
+                $deferred->resolve(array_shift($subscriptions));
+            })
+            ->otherwise(static function ($exception) use ($deferred) {
+                $deferred->reject($exception);
+            });
+
+        return $deferred->promise();
     }
 
     /**
