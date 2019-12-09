@@ -9,6 +9,7 @@ use BinSoul\Net\Mqtt\DefaultMessage;
 use BinSoul\Net\Mqtt\DefaultSubscription;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
+use Exception;
 use PHPUnit\Framework\TestCase;
 use React\Dns\Resolver\Factory as DNSResolverFactory;
 use React\Dns\Resolver\Resolver;
@@ -30,7 +31,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var string
      */
-    const NAMESERVER = '8.8.8.8';
+    private const NAMESERVER = '8.8.8.8';
 
     /**
      * Hostname.
@@ -39,7 +40,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var string
      */
-    const HOSTNAME = 'mqtt.eclipse.org';
+    private const HOSTNAME = 'mqtt.eclipse.org';
 
     /**
      * Port.
@@ -49,26 +50,21 @@ class ReactMqttClientTest extends TestCase
      *
      * @var int
      */
-    const PORT = 1883;
-
-    /**
-     * @var bool
-     */
-    const SECURE = true;
+    private const PORT = 1883;
 
     /**
      * The topic prefix.
      *
      * @var string
      */
-    const TOPIC_PREFIX = 'testing/BinSoul/';
+    private const TOPIC_PREFIX = 'testing/BinSoul/';
 
     /**
      * Loop timeout, duration in seconds.
      *
      * @var int
      */
-    const MAXIMUM_EXECUTION_TIME = 10;
+    private const MAXIMUM_EXECUTION_TIME = 10;
 
     /**
      * Event loop.
@@ -120,7 +116,7 @@ class ReactMqttClientTest extends TestCase
     /**
      * Starts the loop.
      */
-    private function startLoop()
+    private function startLoop(): void
     {
         $this->loop->run();
     }
@@ -128,7 +124,7 @@ class ReactMqttClientTest extends TestCase
     /**
      * Stops the loop.
      */
-    private function stopLoop()
+    private function stopLoop(): void
     {
         $this->client->disconnect();
     }
@@ -140,7 +136,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @return Subscription
      */
-    private function generateSubscription($qosLevel = 0)
+    private function generateSubscription($qosLevel = 0): Subscription
     {
         return new DefaultSubscription(self::TOPIC_PREFIX.uniqid(), $qosLevel);
     }
@@ -151,7 +147,7 @@ class ReactMqttClientTest extends TestCase
      * @param string $message
      * @param string $clientName
      */
-    private function log($message, $clientName = '')
+    private function log($message, $clientName = ''): void
     {
         echo date('H:i:s').' - '.$message.($clientName !== '' ? ' ('.$clientName.' client)' : '').PHP_EOL;
     }
@@ -164,7 +160,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @return ReactMqttClient
      */
-    private function buildClient($name = '', $isPrimary = true)
+    private function buildClient($name = '', $isPrimary = true): ReactMqttClient
     {
         $connector = new Connector($this->loop, ['timeout' => false]);
 
@@ -231,11 +227,11 @@ class ReactMqttClientTest extends TestCase
             );
         });
 
-        $client->on('warning', function (\Exception $e) use ($name) {
+        $client->on('warning', function (Exception $e) use ($name) {
             $this->log(sprintf('Warning: %s', $e->getMessage()), $name);
         });
 
-        $client->on('error', function (\Exception $e, ReactMqttClient $client) use ($name) {
+        $client->on('error', function (Exception $e, ReactMqttClient $client) use ($name) {
             $this->log(sprintf('Error: %s', $e->getMessage()), $name);
             if (!$client->isConnected()) {
                 $this->loop->stop();
@@ -252,7 +248,7 @@ class ReactMqttClientTest extends TestCase
      * @param Subscription $subscription Topic or pattern used for subscription, e.g. /A/B/C, /A/B/+, /A/B/#
      * @param Message      $message      Topic used for publication, e.g. /A/B/C, /A/B/foo/bar
      */
-    private function subscribeAndPublish(Subscription $subscription, Message $message)
+    private function subscribeAndPublish(Subscription $subscription, Message $message): void
     {
         $client = $this->buildClient();
 
@@ -292,7 +288,7 @@ class ReactMqttClientTest extends TestCase
     /**
      * Tests that a client can successfully connect to a broker.
      */
-    public function test_connect_success()
+    public function test_connect_success(): void
     {
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, self::PORT)
@@ -313,7 +309,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_connect_failure()
+    public function test_connect_failure(): void
     {
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, 12345, null, 1)
@@ -334,7 +330,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_is_connected_when_connect_event_emitted()
+    public function test_is_connected_when_connect_event_emitted(): void
     {
         $client = $this->buildClient();
 
@@ -357,7 +353,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_is_disconnected_when_disconnect_event_emitted()
+    public function test_is_disconnected_when_disconnect_event_emitted(): void
     {
         $client = $this->buildClient();
 
@@ -383,7 +379,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_send_and_receive_message_qos_level_0()
+    public function test_send_and_receive_message_qos_level_0(): void
     {
         $subscription = $this->generateSubscription(0);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=0', 0);
@@ -395,7 +391,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_send_and_receive_message_qos_level_1()
+    public function test_send_and_receive_message_qos_level_1(): void
     {
         $subscription = $this->generateSubscription(1);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=1', 1);
@@ -407,7 +403,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_send_and_receive_message_qos_level_2()
+    public function test_send_and_receive_message_qos_level_2(): void
     {
         $subscription = $this->generateSubscription(2);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=2', 2);
@@ -419,7 +415,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_can_subscribe_to_single_level_wildcard_filter()
+    public function test_can_subscribe_to_single_level_wildcard_filter(): void
     {
         $subscription = $this->generateSubscription();
         $message = new DefaultMessage($subscription->getFilter().'/A/B/foo/C', 'Never vandalize a ship.');
@@ -433,7 +429,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_can_subscribe_to_multi_level_wildcard_filter()
+    public function test_can_subscribe_to_multi_level_wildcard_filter(): void
     {
         $subscription = $this->generateSubscription();
         $message = new DefaultMessage($subscription->getFilter().'/A/B/foo/bar/baz/C', 'Never sail a kraken.');
@@ -447,7 +443,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_send_and_receive_message_qos_level_1
      */
-    public function test_retained_message_is_published()
+    public function test_retained_message_is_published(): void
     {
         $client = $this->buildClient();
         $subscription = $this->generateSubscription(1);
@@ -497,7 +493,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_send_and_receive_message_qos_level_1
      */
-    public function test_client_will_is_set()
+    public function test_client_will_is_set(): void
     {
         $regularClient = $this->buildClient('regular');
 
@@ -525,7 +521,7 @@ class ReactMqttClientTest extends TestCase
                         $failingClient = $this->buildClient('failing', false);
 
                         $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will))
-                            ->then(function () use ($failingClient) {
+                            ->then(static function () use ($failingClient) {
                                 // NOTE: This is the only way we can force the
                                 // the broker to publish the will.
                                 $failingClient->getStream()->close();
@@ -545,7 +541,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_send_and_receive_message_qos_level_0
      */
-    public function test_publish_and_receive_multiple_times()
+    public function test_publish_and_receive_multiple_times(): void
     {
         $client = $this->buildClient();
         $subscription = $this->generateSubscription();
@@ -570,10 +566,10 @@ class ReactMqttClientTest extends TestCase
 
         // Connect
         $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client, $subscription, $messages) {
+            ->then(static function () use ($client, $subscription, $messages) {
                 // Subscribe
                 $client->subscribe($subscription)
-                    ->then(function (Subscription $subscription) use ($client, $messages) {
+                    ->then(static function (Subscription $subscription) use ($client, $messages) {
                         // Publish message A
                         $client->publish(new DefaultMessage($subscription->getFilter(), $messages[0]));
                         // Publish message B
@@ -589,7 +585,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_send_and_receive_message_qos_level_0
      */
-    public function test_publish_periodically()
+    public function test_publish_periodically(): void
     {
         $client = $this->buildClient();
         $subscription = $this->generateSubscription();
@@ -609,7 +605,7 @@ class ReactMqttClientTest extends TestCase
                 $client->subscribe($subscription)
                     ->then(function () use ($client, $message) {
                         // Publish periodically
-                        $generator = function () use ($message) {
+                        $generator = static function () use ($message) {
                             return $message->getPayload();
                         };
 
@@ -630,7 +626,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @depends test_connect_success
      */
-    public function test_unsubscribe()
+    public function test_unsubscribe(): void
     {
         $client = $this->buildClient();
         $subscription = $this->generateSubscription();
@@ -643,8 +639,9 @@ class ReactMqttClientTest extends TestCase
                     ->then(function (Subscription $subscription) use ($client) {
                         // Unsubscribe
                         $client->unsubscribe($subscription)
-                            ->then(function (Subscription $subscription) {
-                                $this->log(sprintf('Unsubscribe: %s', $subscription->getFilter()));
+                            ->then(function (Subscription $s) use($subscription) {
+                                $this->assertEquals($subscription->getFilter(), $s->getFilter());
+                                $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
                                 $this->stopLoop();
                             });
                     });

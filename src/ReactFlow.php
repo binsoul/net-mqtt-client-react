@@ -30,7 +30,7 @@ class ReactFlow implements Flow
      * @param Packet   $packet
      * @param bool     $isSilent
      */
-    public function __construct(Flow $decorated, Deferred $deferred, Packet $packet = null, bool $isSilent = false)
+    public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false)
     {
         $this->decorated = $decorated;
         $this->deferred = $deferred;
@@ -43,7 +43,7 @@ class ReactFlow implements Flow
         return $this->decorated->getCode();
     }
 
-    public function start()
+    public function start(): ?Packet
     {
         $this->packet = $this->decorated->start();
 
@@ -55,7 +55,7 @@ class ReactFlow implements Flow
         return $this->decorated->accept($packet);
     }
 
-    public function next(Packet $packet)
+    public function next(Packet $packet): ?Packet
     {
         $this->packet = $this->decorated->next($packet);
 
@@ -97,7 +97,7 @@ class ReactFlow implements Flow
      *
      * @return Packet|null
      */
-    public function getPacket()
+    public function getPacket(): ?Packet
     {
         return $this->packet;
     }
