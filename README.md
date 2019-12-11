@@ -3,6 +3,7 @@
 [![Latest Version on Packagist][ico-version]][link-packagist]
 [![Software License][ico-license]](LICENSE.md)
 [![Total Downloads][ico-downloads]][link-downloads]
+[![Build Status](https://travis-ci.org/binsoul/net-mqtt-client-react.svg?branch=master)](https://travis-ci.org/binsoul/net-mqtt-client-react)
 
 This package provides an asynchronous MQTT client built on the [React socket](https://github.com/reactphp/socket) library. All client methods return a promise which is fulfilled if the operation succeeded or rejected if the operation failed. Incoming messages of subscribed topics are delivered via the "message" event.
 
