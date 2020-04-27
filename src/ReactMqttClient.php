@@ -92,12 +92,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Constructs an instance of this class.
-     *
-     * @param ConnectorInterface             $connector
-     * @param LoopInterface                  $loop
-     * @param ClientIdentifierGenerator|null $identifierGenerator
-     * @param FlowFactory|null               $flowFactory
-     * @param StreamParser|null              $parser
      */
     public function __construct(
         ConnectorInterface $connector,
@@ -131,8 +125,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Return the host.
-     *
-     * @return string
      */
     public function getHost(): string
     {
@@ -141,8 +133,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Return the port.
-     *
-     * @return int
      */
     public function getPort(): int
     {
@@ -151,8 +141,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Indicates if the client is connected.
-     *
-     * @return bool
      */
     public function isConnected(): bool
     {
@@ -161,8 +149,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Returns the underlying stream or null if the client is not connected.
-     *
-     * @return DuplexStreamInterface|null
      */
     public function getStream(): ?DuplexStreamInterface
     {
@@ -171,15 +157,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Connects to a broker.
-     *
-     * @param string     $host
-     * @param int        $port
-     * @param Connection $connection
-     * @param int        $timeout
-     *
-     * @return ExtendedPromiseInterface
      */
-    public function connect(string $host, int $port = 1883, Connection $connection = null, int $timeout = 5): ExtendedPromiseInterface
+    public function connect(string $host, int $port = 1883, ?Connection $connection = null, int $timeout = 5): ExtendedPromiseInterface
     {
         if ($this->isConnected || $this->isConnecting) {
             return new RejectedPromise(new LogicException('The client is already connected.'));
@@ -241,10 +220,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Disconnects from a broker.
-     *
-     * @param int $timeout
-     *
-     * @return ExtendedPromiseInterface
      */
     public function disconnect(int $timeout = 5): ExtendedPromiseInterface
     {
@@ -298,10 +273,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Subscribes to a topic filter.
-     *
-     * @param Subscription $subscription
-     *
-     * @return ExtendedPromiseInterface
      */
     public function subscribe(Subscription $subscription): ExtendedPromiseInterface
     {
@@ -314,10 +285,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Unsubscribes from a topic filter.
-     *
-     * @param Subscription $subscription
-     *
-     * @return ExtendedPromiseInterface
      */
     public function unsubscribe(Subscription $subscription): ExtendedPromiseInterface
     {
@@ -340,10 +307,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Publishes a message.
-     *
-     * @param Message $message
-     *
-     * @return ExtendedPromiseInterface
      */
     public function publish(Message $message): ExtendedPromiseInterface
     {
@@ -356,12 +319,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Calls the given generator periodically and publishes the return value.
-     *
-     * @param int      $interval
-     * @param Message  $message
-     * @param callable $generator
-     *
-     * @return ExtendedPromiseInterface
      */
     public function publishPeriodically(int $interval, Message $message, callable $generator): ExtendedPromiseInterface
     {
@@ -390,10 +347,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Emits warnings.
-     *
-     * @param Throwable $error
-     *
-     * @return void
      */
     private function emitWarning(Throwable $error): void
     {
@@ -402,10 +355,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Emits errors.
-     *
-     * @param Throwable $error
-     *
-     * @return void
      */
     private function emitError(Throwable $error): void
     {
@@ -414,12 +363,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Establishes a network connection to a server.
-     *
-     * @param string $host
-     * @param int    $port
-     * @param int    $timeout
-     *
-     * @return ExtendedPromiseInterface
      */
     private function establishConnection(string $host, int $port, int $timeout): ExtendedPromiseInterface
     {
@@ -466,11 +409,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Registers a new client with the broker.
-     *
-     * @param Connection $connection
-     * @param int        $timeout
-     *
-     * @return ExtendedPromiseInterface
      */
     private function registerClient(Connection $connection, int $timeout): ExtendedPromiseInterface
     {
@@ -505,10 +443,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles incoming data.
-     *
-     * @param string $data
-     *
-     * @return void
      */
     private function handleReceive(string $data): void
     {
@@ -532,10 +466,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles an incoming packet.
-     *
-     * @param Packet $packet
-     *
-     * @return void
      */
     private function handlePacket(Packet $packet): void
     {
@@ -590,8 +520,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles outgoing packets.
-     *
-     * @return void
      */
     private function handleSend(): void
     {
@@ -619,8 +547,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles closing of the stream.
-     *
-     * @return void
      */
     private function handleClose(): void
     {
@@ -648,10 +574,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Handles errors of the stream.
-     *
-     * @param Throwable $error
-     *
-     * @return void
      */
     private function handleError(Throwable $error): void
     {
@@ -660,11 +582,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Starts the given flow.
-     *
-     * @param Flow $flow
-     * @param bool $isSilent
-     *
-     * @return ExtendedPromiseInterface
      */
     private function startFlow(Flow $flow, bool $isSilent = false): ExtendedPromiseInterface
     {
@@ -698,11 +615,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Continues the given flow.
-     *
-     * @param ReactFlow $flow
-     * @param Packet    $packet
-     *
-     * @return void
      */
     private function continueFlow(ReactFlow $flow, Packet $packet): void
     {
@@ -731,10 +643,6 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Finishes the given flow.
-     *
-     * @param ReactFlow $flow
-     *
-     * @return void
      */
     private function finishFlow(ReactFlow $flow): void
     {

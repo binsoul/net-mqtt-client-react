@@ -131,12 +131,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Returns a new subscription.
-     *
-     * @param int $qosLevel
-     *
-     * @return Subscription
      */
-    private function generateSubscription($qosLevel = 0): Subscription
+    private function generateSubscription(int $qosLevel = 0): Subscription
     {
         return new DefaultSubscription(self::TOPIC_PREFIX.uniqid(), $qosLevel);
     }
@@ -154,13 +150,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Returns a new client.
-     *
-     * @param string $name
-     * @param bool   $isPrimary
-     *
-     * @return ReactMqttClient
      */
-    private function buildClient($name = '', $isPrimary = true): ReactMqttClient
+    private function buildClient(string $name = '', bool $isPrimary = true): ReactMqttClient
     {
         $connector = new Connector($this->loop, ['timeout' => false]);
 

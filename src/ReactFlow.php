@@ -24,11 +24,6 @@ class ReactFlow implements Flow
 
     /**
      * Constructs an instance of this class.
-     *
-     * @param Flow     $decorated
-     * @param Deferred $deferred
-     * @param Packet   $packet
-     * @param bool     $isSilent
      */
     public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false)
     {
@@ -84,8 +79,6 @@ class ReactFlow implements Flow
 
     /**
      * Returns the associated deferred.
-     *
-     * @return Deferred
      */
     public function getDeferred(): Deferred
     {
@@ -94,8 +87,6 @@ class ReactFlow implements Flow
 
     /**
      * Returns the current packet.
-     *
-     * @return Packet|null
      */
     public function getPacket(): ?Packet
     {
@@ -104,8 +95,6 @@ class ReactFlow implements Flow
 
     /**
      * Indicates if the flow should emit events.
-     *
-     * @return bool
      */
     public function isSilent(): bool
     {

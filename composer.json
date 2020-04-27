@@ -45,8 +45,8 @@
     "scripts": {
         "test": "phpunit",
         "fix-style": [
-            "php-cs-fixer fix src --rules=@Symfony,-yoda_style,-no_superfluous_phpdoc_tags",
-            "php-cs-fixer fix tests --rules=@Symfony,-yoda_style,-no_superfluous_phpdoc_tags"
+            "php-cs-fixer fix src --rules=@Symfony,-yoda_style",
+            "php-cs-fixer fix tests --rules=@Symfony,-yoda_style"
         ],
         "analyze": "phpstan analyse -l 7 src"
     },
