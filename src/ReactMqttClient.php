@@ -93,11 +93,11 @@ class ReactMqttClient extends EventEmitter
     /**
      * Constructs an instance of this class.
      *
-     * @param ConnectorInterface $connector
-     * @param LoopInterface $loop
+     * @param ConnectorInterface             $connector
+     * @param LoopInterface                  $loop
      * @param ClientIdentifierGenerator|null $identifierGenerator
-     * @param FlowFactory|null $flowFactory
-     * @param StreamParser|null $parser
+     * @param FlowFactory|null               $flowFactory
+     * @param StreamParser|null              $parser
      */
     public function __construct(
         ConnectorInterface $connector,

@@ -639,7 +639,7 @@ class ReactMqttClientTest extends TestCase
                     ->then(function (Subscription $subscription) use ($client) {
                         // Unsubscribe
                         $client->unsubscribe($subscription)
-                            ->then(function (Subscription $s) use($subscription) {
+                            ->then(function (Subscription $s) use ($subscription) {
                                 $this->assertEquals($subscription->getFilter(), $s->getFilter());
                                 $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
                                 $this->stopLoop();
