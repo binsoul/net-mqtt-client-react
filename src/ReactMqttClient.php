@@ -114,8 +114,8 @@ class ReactMqttClient extends EventEmitter
             $this->parser = new StreamParser(new DefaultPacketFactory());
         }
 
-        $this->parser->onError(function (Throwable $e) {
-            $this->emitWarning($e);
+        $this->parser->onError(function (Throwable $error) {
+            $this->emitWarning($error);
         });
 
         $this->identifierGenerator = $identifierGenerator;
@@ -216,11 +216,11 @@ class ReactMqttClient extends EventEmitter
                         $this->emit('connect', [$connection, $this]);
                         $deferred->resolve($result ?: $connection);
                     })
-                    ->otherwise(function (Throwable $e) use ($connection, $deferred) {
+                    ->otherwise(function (Throwable $reason) use ($connection, $deferred) {
                         $this->isConnecting = false;
 
-                        $this->emitError($e);
-                        $deferred->reject($e);
+                        $this->emitError($reason);
+                        $deferred->reject($reason);
 
                         if ($this->stream !== null) {
                             $this->stream->close();
@@ -229,11 +229,11 @@ class ReactMqttClient extends EventEmitter
                         $this->emit('close', [$connection, $this]);
                     });
             })
-            ->otherwise(function (Throwable $e) use ($deferred) {
+            ->otherwise(function (Throwable $reason) use ($deferred) {
                 $this->isConnecting = false;
 
-                $this->emitError($e);
-                $deferred->reject($e);
+                $this->emitError($reason);
+                $deferred->reject($reason);
             });
 
         return $deferred->promise();
@@ -378,8 +378,8 @@ class ReactMqttClient extends EventEmitter
                     static function ($value) use ($deferred) {
                         $deferred->notify($value);
                     },
-                    static function (Throwable $e) use ($deferred) {
-                        $deferred->reject($e);
+                    static function (Throwable $reason) use ($deferred) {
+                        $deferred->reject($reason);
                     }
                 );
             }
@@ -391,25 +391,25 @@ class ReactMqttClient extends EventEmitter
     /**
      * Emits warnings.
      *
-     * @param Throwable $e
+     * @param Throwable $error
      *
      * @return void
      */
-    private function emitWarning(Throwable $e): void
+    private function emitWarning(Throwable $error): void
     {
-        $this->emit('warning', [$e, $this]);
+        $this->emit('warning', [$error, $this]);
     }
 
     /**
      * Emits errors.
      *
-     * @param Throwable $e
+     * @param Throwable $error
      *
      * @return void
      */
-    private function emitError(Throwable $e): void
+    private function emitError(Throwable $error): void
     {
-        $this->emit('error', [$e, $this]);
+        $this->emit('error', [$error, $this]);
     }
 
     /**
@@ -451,14 +451,14 @@ class ReactMqttClient extends EventEmitter
                     $this->handleClose();
                 });
 
-                $stream->on('error', function (Throwable $e) {
-                    $this->handleError($e);
+                $stream->on('error', function (Throwable $error) {
+                    $this->handleError($error);
                 });
 
                 $deferred->resolve($stream);
             })
-            ->otherwise(static function (Throwable $e) use ($deferred) {
-                $deferred->reject($e);
+            ->otherwise(static function (Throwable $reason) use ($deferred) {
+                $deferred->reject($reason);
             });
 
         return $deferred->promise();
@@ -496,8 +496,8 @@ class ReactMqttClient extends EventEmitter
                 );
 
                 $deferred->resolve($result ?: $connection);
-            })->otherwise(static function (Throwable $e) use ($deferred) {
-                $deferred->reject($e);
+            })->otherwise(static function (Throwable $reason) use ($deferred) {
+                $deferred->reject($reason);
             });
 
         return $deferred->promise();
@@ -649,13 +649,13 @@ class ReactMqttClient extends EventEmitter
     /**
      * Handles errors of the stream.
      *
-     * @param Throwable $e
+     * @param Throwable $error
      *
      * @return void
      */
-    private function handleError(Throwable $e): void
+    private function handleError(Throwable $error): void
     {
-        $this->emitError($e);
+        $this->emitError($error);
     }
 
     /**
@@ -670,10 +670,10 @@ class ReactMqttClient extends EventEmitter
     {
         try {
             $packet = $flow->start();
-        } catch (Throwable $e) {
-            $this->emitError($e);
+        } catch (Throwable $t) {
+            $this->emitError($t);
 
-            return new RejectedPromise($e);
+            return new RejectedPromise($t);
         }
 
         $deferred = new Deferred();
@@ -708,8 +708,8 @@ class ReactMqttClient extends EventEmitter
     {
         try {
             $response = $flow->next($packet);
-        } catch (Throwable $e) {
-            $this->emitError($e);
+        } catch (Throwable $t) {
+            $this->emitError($t);
 
             return;
         }
