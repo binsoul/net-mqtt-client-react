@@ -274,13 +274,13 @@ class ReactMqttClient extends EventEmitter
     /**
      * Subscribes to a topic filter.
      */
-    public function subscribe(Subscription $subscription): ExtendedPromiseInterface
+    public function subscribe(Subscription $subscription, Subscription ...$subscriptions): ExtendedPromiseInterface
     {
         if (!$this->isConnected) {
             return new RejectedPromise(new LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]));
+        return $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription, ...$subscriptions]));
     }
 
     /**
