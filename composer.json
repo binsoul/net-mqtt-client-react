@@ -17,7 +17,7 @@
         }
     ],
     "require": {
-        "php": "^7.2",
+        "php": "^7.2 || ^8.0",
         "binsoul/net-mqtt": "^0.8",
         "evenement/evenement": "^3",
         "react/event-loop": "^1.1",
