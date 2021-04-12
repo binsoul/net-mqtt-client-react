@@ -40,7 +40,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var string
      */
-    private const HOSTNAME = 'mqtt.eclipse.org';
+    private const HOSTNAME = 'test.mosquitto.org';
 
     /**
      * Port.
