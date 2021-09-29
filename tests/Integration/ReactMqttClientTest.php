@@ -11,9 +11,7 @@ use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
 use Exception;
 use PHPUnit\Framework\TestCase;
-use React\Dns\Resolver\Factory as DNSResolverFactory;
-use React\Dns\Resolver\Resolver;
-use React\EventLoop\Factory as EventLoopFactory;
+use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Socket\Connector;
 
@@ -27,20 +25,13 @@ use React\Socket\Connector;
 class ReactMqttClientTest extends TestCase
 {
     /**
-     * Nameserver.
-     *
-     * @var string
-     */
-    private const NAMESERVER = '8.8.8.8';
-
-    /**
      * Hostname.
      *
      * @see http://iot.eclipse.org/getting-started
      *
      * @var string
      */
-    private const HOSTNAME = 'test.mosquitto.org';
+    private const DEFAULT_HOSTNAME = 'test.mosquitto.org';
 
     /**
      * Port.
@@ -50,7 +41,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var int
      */
-    private const PORT = 1883;
+    private const DEFAULT_PORT = 1883;
 
     /**
      * The topic prefix.
@@ -74,24 +65,32 @@ class ReactMqttClientTest extends TestCase
     private $loop;
 
     /**
-     * DNS resolver.
-     *
-     * @var Resolver
-     */
-    private $resolver;
-
-    /**
      * @var ReactMqttClient
      */
     private $client;
 
+    /**
+     * MQTT server hostname
+     *
+     * @var string
+     */
+    private $hostname;
+
+    /**
+     * MQTT server hostname
+     *
+     * @var int
+     */
+    private $port;
+
     protected function setUp(): void
     {
         // Create event loop
-        $this->loop = EventLoopFactory::create();
+        $this->loop = Loop::get();
 
-        // DNS Resolver
-        $this->resolver = (new DNSResolverFactory())->createCached(self::NAMESERVER, $this->loop);
+        // Determine hostname
+        $this->hostname = $_SERVER['MQTT_HOSTNAME'] ?? self::DEFAULT_HOSTNAME;
+        $this->port = $_SERVER['MQTT_PORT'] ?? self::DEFAULT_PORT;
 
         // Add loop timeout
         $this->loop->addPeriodicTimer(self::MAXIMUM_EXECUTION_TIME, function () {
@@ -139,11 +138,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Logs the given message.
-     *
-     * @param string $message
-     * @param string $clientName
      */
-    private function log($message, $clientName = ''): void
+    private function log(string $message, string $clientName = ''): void
     {
         echo date('H:i:s').' - '.$message.($clientName !== '' ? ' ('.$clientName.' client)' : '').PHP_EOL;
     }
@@ -160,12 +156,12 @@ class ReactMqttClientTest extends TestCase
             $this->client = $client;
         }
 
-        $client->on('open', function () use ($name) {
-            $this->log(sprintf('Open: %s:%d', self::HOSTNAME, self::PORT), $name);
+        $client->on('open', function () use ($name, $client) {
+            $this->log(sprintf('Open: %s:%d', $client->getHost(), $client->getPort()), $name);
         });
 
-        $client->on('close', function () use ($name, $isPrimary) {
-            $this->log(sprintf('Close: %s:%d', self::HOSTNAME, self::PORT), $name);
+        $client->on('close', function () use ($name, $isPrimary, $client) {
+            $this->log(sprintf('Close: %s:%d', $client->getHost(), $client->getPort()), $name);
             if ($isPrimary) {
                 $this->loop->stop();
             }
@@ -242,16 +238,18 @@ class ReactMqttClientTest extends TestCase
     private function subscribeAndPublish(Subscription $subscription, Message $message): void
     {
         $client = $this->buildClient();
+        $messageReceived = false;
 
         // Listen for messages
-        $client->on('message', function (Message $receivedMessage) use ($message) {
+        $client->on('message', function (Message $receivedMessage) use ($message, &$messageReceived) {
             $this->assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
             $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+            $messageReceived = true;
             $this->stopLoop();
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect($this->hostname, $this->port)
             ->then(function () use ($client, $subscription, $message) {
                 // Subscribe
                 $client->subscribe($subscription)
@@ -260,16 +258,17 @@ class ReactMqttClientTest extends TestCase
                         $client->publish($message)
                             ->otherwise(function () {
                                 $this->fail('Failed to publish message.');
-                                $this->stopLoop();
-                            });
+                            })
+                            ->done();
                     })
                     ->otherwise(function () {
                         $this->fail('Failed to subscribe to topic.');
-                        $this->stopLoop();
-                    });
+                    })
+                    ->done();
             });
 
         $this->startLoop();
+        $this->assertTrue($messageReceived);
     }
 
     /*******************************************************
@@ -281,39 +280,42 @@ class ReactMqttClientTest extends TestCase
      */
     public function test_connect_success(): void
     {
+        $connected = false;
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client) {
+        $client->connect($this->hostname, $this->port)
+            ->done(function () use ($client, &$connected) {
                 $this->assertTrue($client->isConnected());
-                $this->stopLoop();
-            })
-            ->otherwise(function () use ($client) {
-                $this->assertFalse($client->isConnected());
+                $connected = true;
                 $this->stopLoop();
             });
 
         $this->startLoop();
+        $this->assertTrue($connected);
     }
 
     /**
-     * Tests that a client fails to connect to a invalid broker.
+     * Tests that a client fails to connect to an invalid broker.
      *
      * @depends test_connect_success
      */
     public function test_connect_failure(): void
     {
+        $connected = null;
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, 12345, null, 1)
-            ->then(function () use ($client) {
-                $this->assertTrue($client->isConnected());
-                $this->stopLoop();
-            })
-            ->otherwise(function () use ($client) {
-                $this->assertFalse($client->isConnected());
-                $this->stopLoop();
-            });
+        $client->connect($this->hostname, 12345, null, 0.5)
+            ->done(
+                function () use (&$connected) {
+                    $connected = true;
+                },
+                function () use ($client, &$connected) {
+                    $this->assertFalse($client->isConnected());
+                    $connected = false;
+                    $this->stopLoop();
+                }
+            );
 
         $this->startLoop();
+        $this->assertFalse($connected);
     }
 
     /**
@@ -325,18 +327,24 @@ class ReactMqttClientTest extends TestCase
     {
         $client = $this->buildClient();
 
-        $client->on('connect', function () use ($client) {
+        $connectCount = 0;
+
+        $client->on('connect', function () use ($client, &$connectCount) {
             $this->assertTrue($client->isConnected(), 'Client is should be connected');
+            $connectCount++;
             $this->stopLoop();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client) {
+        $client->connect($this->hostname, $this->port)
+            ->then(function () use ($client, &$connectCount) {
                 $this->assertTrue($client->isConnected());
+                $connectCount++;
+            })->always(function () {
                 $this->stopLoop();
-            });
+            })->done();
 
         $this->startLoop();
+        $this->assertEquals(2, $connectCount);
     }
 
     /**
@@ -348,21 +356,25 @@ class ReactMqttClientTest extends TestCase
     {
         $client = $this->buildClient();
 
-        $client->on('disconnect', function () use ($client) {
+        $disconnectCount = 0;
+        $client->on('disconnect', function () use ($client, &$disconnectCount) {
             $this->assertFalse($client->isConnected(), 'Client is should be disconnected');
+            $disconnectCount++;
             $this->stopLoop();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client) {
+        $client->connect($this->hostname, $this->port)
+            ->done(function () use ($client, &$disconnectCount) {
                 $client->disconnect()
-                    ->then(function () use ($client) {
+                    ->done(function () use ($client, &$disconnectCount) {
                         $this->assertFalse($client->isConnected());
+                        $disconnectCount++;
                         $this->stopLoop();
                     });
             });
 
         $this->startLoop();
+        $this->assertEquals(2, $disconnectCount);
     }
 
     /**
@@ -439,9 +451,11 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $subscription = $this->generateSubscription(1);
         $message = new DefaultMessage($subscription->getFilter(), 'retain', 1, true);
+        $messageReceived = false;
+
 
         // Listen for messages
-        $client->on('message', function (Message $receivedMessage) use ($client, $message) {
+        $client->on('message', function (Message $receivedMessage) use ($client, $message, &$messageReceived) {
             if ($receivedMessage->getPayload() === '') {
                 // clean retained message
                 return;
@@ -451,38 +465,38 @@ class ReactMqttClientTest extends TestCase
             $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
             $this->assertTrue($receivedMessage->isRetained(), 'Message should be retained');
 
+            $messageReceived = true;
+
             // Cleanup retained message on broker
             $client->publish($message->withPayload('')->withQosLevel(1))
                 ->always(function () {
                     $this->stopLoop();
-                });
+                })->done();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client, $subscription, $message) {
+        $client->connect($this->hostname, $this->port)
+            ->done(function () use ($client, $subscription, $message) {
                 // Here we do the reverse - we publish first! (Retained msg)
                 $client->publish($message)
                     // Now we subscribe and listen on the given topic
                     ->then(function () use ($client, $subscription) {
                         // Subscribe
                         $client->subscribe($subscription)
-                            ->otherwise(function () {
+                            ->done(null, function () {
                                 $this->fail('Failed to subscribe to topic.');
-                                $this->stopLoop();
                             });
                     })->otherwise(function () {
                         $this->fail('Failed to publish to topic.');
-                        $this->stopLoop();
-                    });
+                    })->done();
             });
 
         $this->startLoop();
+        $this->assertTrue($messageReceived);
     }
 
     /**
      * Tests that the will of a client can be set successfully.
      *
-     * @depends test_send_and_receive_message_qos_level_1
      */
     public function test_client_will_is_set(): void
     {
@@ -494,16 +508,19 @@ class ReactMqttClientTest extends TestCase
             1
         );
 
+        $willReceived = false;
+
         // Listen for messages
-        $regularClient->on('message', function (Message $receivedMessage) use ($will) {
+        $regularClient->on('message', function (Message $receivedMessage) use ($will, &$willReceived) {
             $this->assertSame($will->getTopic(), $receivedMessage->getTopic(), 'Incorrect will topic');
             $this->assertSame($will->getPayload(), $receivedMessage->getPayload(), 'Incorrect will message');
+            $willReceived = true;
             $this->stopLoop();
         });
 
         // Connect
-        $regularClient->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($regularClient, $will) {
+        $regularClient->connect($this->hostname, $this->port)
+            ->done(function () use ($regularClient, $will) {
                 $regularClient->subscribe(new DefaultSubscription($will->getTopic(), $will->getQosLevel()))
                     ->then(function () use ($will) {
                         // In order to test that a will is published, we create a
@@ -511,7 +528,7 @@ class ReactMqttClientTest extends TestCase
                         // connection on purpose.
                         $failingClient = $this->buildClient('failing', false);
 
-                        $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will))
+                        $failingClient->connect($this->hostname, $this->port, (new DefaultConnection())->withWill($will))
                             ->then(static function () use ($failingClient) {
                                 // NOTE: This is the only way we can force the
                                 // the broker to publish the will.
@@ -520,11 +537,12 @@ class ReactMqttClientTest extends TestCase
                     })
                     ->otherwise(function () {
                         $this->fail('Failed to subscribe to will topic.');
-                        $this->stopLoop();
-                    });
+                    })
+                    ->done();
             });
 
         $this->startLoop();
+        $this->assertTrue($willReceived);
     }
 
     /**
@@ -556,8 +574,8 @@ class ReactMqttClientTest extends TestCase
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(static function () use ($client, $subscription, $messages) {
+        $client->connect($this->hostname, $this->port)
+            ->done(static function () use ($client, $subscription, $messages) {
                 // Subscribe
                 $client->subscribe($subscription)
                     ->then(static function (Subscription $subscription) use ($client, $messages) {
@@ -569,6 +587,7 @@ class ReactMqttClientTest extends TestCase
             });
 
         $this->startLoop();
+        $this->assertGreaterThanOrEqual(2, $count);
     }
 
     /**
@@ -582,19 +601,25 @@ class ReactMqttClientTest extends TestCase
         $subscription = $this->generateSubscription();
         $message = new DefaultMessage($subscription->getFilter(), 'periodic');
 
+        $messageCount = 0;
+
         // Listen for messages
-        $client->on('message', function (Message $receivedMessage) use ($message) {
+        $client->on('message', function (Message $receivedMessage) use ($message, &$messageCount) {
             $this->assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
             $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
-            $this->stopLoop();
+            $messageCount++;
+
+            if ($messageCount >= 3) {
+                $this->stopLoop();
+            }
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client, $subscription, $message) {
+        $client->connect($this->hostname, $this->port)
+            ->done(function () use ($client, $subscription, $message) {
                 // Subscribe
                 $client->subscribe($subscription)
-                    ->then(function () use ($client, $message) {
+                    ->done(function () use ($client, $message) {
                         // Publish periodically
                         $generator = static function () use ($message) {
                             return $message->getPayload();
@@ -605,11 +630,13 @@ class ReactMqttClientTest extends TestCase
                                 $this->log(
                                     sprintf('Progress: %s => %s', $message->getTopic(), $message->getPayload())
                                 );
-                            });
+                            })
+                            ->done();
                     });
             });
 
         $this->startLoop();
+        $this->assertGreaterThanOrEqual(3, $messageCount);
     }
 
     /**
@@ -622,22 +649,26 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $subscription = $this->generateSubscription();
 
+        $unsubscribed = false;
+
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
-            ->then(function () use ($client, $subscription) {
+        $client->connect($this->hostname, $this->port)
+            ->done(function () use ($client, $subscription, &$unsubscribed) {
                 // Subscribe
                 $client->subscribe($subscription)
-                    ->then(function (Subscription $subscription) use ($client) {
+                    ->done(function (Subscription $subscription) use ($client, &$unsubscribed) {
                         // Unsubscribe
                         $client->unsubscribe($subscription)
-                            ->then(function (Subscription $s) use ($subscription) {
+                            ->done(function (Subscription $s) use ($subscription, &$unsubscribed) {
                                 $this->assertEquals($subscription->getFilter(), $s->getFilter());
                                 $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
+                                $unsubscribed = true;
                                 $this->stopLoop();
                             });
                     });
             });
 
         $this->startLoop();
+        $this->assertTrue($unsubscribed);
     }
 }
