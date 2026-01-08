@@ -356,7 +356,7 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
 
         $client->on('disconnect', function () use ($client) {
-            $this->assertFalse($client->isConnected(), 'Client is should be disconnected');
+            $this->assertFalse($client->isConnected(), 'Client should be disconnected');
             $this->stopLoop();
         });
 
