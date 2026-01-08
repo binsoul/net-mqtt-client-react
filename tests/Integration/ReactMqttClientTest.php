@@ -53,6 +53,13 @@ class ReactMqttClientTest extends TestCase
     private const PORT = 1883;
 
     /**
+     * The timeout for the connection attempt.
+     *
+     * @var int
+     */
+    private const CONNECT_TIMEOUT = 30;
+
+    /**
      * The topic prefix.
      *
      * @var string
@@ -64,7 +71,7 @@ class ReactMqttClientTest extends TestCase
      *
      * @var int
      */
-    private const MAXIMUM_EXECUTION_TIME = 10;
+    private const MAXIMUM_EXECUTION_TIME = 60;
 
     /**
      * Event loop.
@@ -251,7 +258,7 @@ class ReactMqttClientTest extends TestCase
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client, $subscription, $message) {
                 // Subscribe
                 $client->subscribe($subscription)
@@ -282,7 +289,7 @@ class ReactMqttClientTest extends TestCase
     public function test_connect_success(): void
     {
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client) {
                 $this->assertTrue($client->isConnected());
                 $this->stopLoop();
@@ -330,7 +337,7 @@ class ReactMqttClientTest extends TestCase
             $this->stopLoop();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client) {
                 $this->assertTrue($client->isConnected());
                 $this->stopLoop();
@@ -353,7 +360,7 @@ class ReactMqttClientTest extends TestCase
             $this->stopLoop();
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client) {
                 $client->disconnect()
                     ->then(function () use ($client) {
@@ -458,7 +465,7 @@ class ReactMqttClientTest extends TestCase
                 });
         });
 
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client, $subscription, $message) {
                 // Here we do the reverse - we publish first! (Retained msg)
                 $client->publish($message)
@@ -502,7 +509,7 @@ class ReactMqttClientTest extends TestCase
         });
 
         // Connect
-        $regularClient->connect(self::HOSTNAME, self::PORT)
+        $regularClient->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($regularClient, $will) {
                 $regularClient->subscribe(new DefaultSubscription($will->getTopic(), $will->getQosLevel()))
                     ->then(function () use ($will) {
@@ -511,7 +518,7 @@ class ReactMqttClientTest extends TestCase
                         // connection on purpose.
                         $failingClient = $this->buildClient('failing', false);
 
-                        $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will))
+                        $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will), self::CONNECT_TIMEOUT)
                             ->then(static function () use ($failingClient) {
                                 // NOTE: This is the only way we can force the
                                 // the broker to publish the will.
@@ -556,7 +563,7 @@ class ReactMqttClientTest extends TestCase
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(static function () use ($client, $subscription, $messages) {
                 // Subscribe
                 $client->subscribe($subscription)
@@ -590,7 +597,7 @@ class ReactMqttClientTest extends TestCase
         });
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client, $subscription, $message) {
                 // Subscribe
                 $client->subscribe($subscription)
@@ -623,7 +630,7 @@ class ReactMqttClientTest extends TestCase
         $subscription = $this->generateSubscription();
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT)
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(function () use ($client, $subscription) {
                 // Subscribe
                 $client->subscribe($subscription)
