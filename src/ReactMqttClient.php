@@ -382,7 +382,7 @@ class ReactMqttClient extends EventEmitter
         );
 
         $future = $this->connector->connect($host.':'.$port)
-            ->always(function () use ($timer) {
+            ->finally(function () use ($timer) {
                 $this->loop->cancelTimer($timer);
             })
             ->then(function (DuplexStreamInterface $stream) use ($deferred) {
@@ -423,7 +423,7 @@ class ReactMqttClient extends EventEmitter
         );
 
         $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true)
-            ->always(function () use ($responseTimer) {
+            ->finally(function () use ($responseTimer) {
                 $this->loop->cancelTimer($responseTimer);
             })->then(function ($result) use ($connection, $deferred) {
                 $this->timer[] = $this->loop->addPeriodicTimer(
