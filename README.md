@@ -114,10 +114,11 @@ $client->connect('test.mosquitto.org')->then(
             return mt_rand(-20, 30);
         };
 
-        $client->publishPeriodically(10, new DefaultMessage('sensors/temperature'), $generator)
-            ->progress(function (Message $message) {
-                echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
-            })
+        $onProgress = function (Message $message) {
+            echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
+        };
+
+        $client->publishPeriodically(10, new DefaultMessage('sensors/temperature'), $generator, $onProgress)
             ->catch(function (\Exception $e) {
                 echo sprintf("Error: %s\n", $e->getMessage());
             });

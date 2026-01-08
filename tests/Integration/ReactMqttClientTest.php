@@ -324,6 +324,39 @@ class ReactMqttClientTest extends TestCase
     }
 
     /**
+     * Test that attempting to connect when the client is already connected does work.
+     */
+    public function test_connect_when_already_connected(): void
+    {
+        $client = $this->buildClient();
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+            ->then(function () use ($client) {
+                $client->connect(self::HOSTNAME, 12345, null, 1)->then(function () use ($client) {
+                    $this->assertTrue($client->isConnected(), 'Client should be connected');
+                });
+                $this->stopLoop();
+            })
+            ->catch(function () use ($client) {
+                $this->assertFalse($client->isConnected());
+                $this->stopLoop();
+            });
+
+        $this->startLoop();
+    }
+
+    /**
+     * Test that connecting the client twice returns the same promise.
+     */
+    public function test_connect_twice(): void
+    {
+        $client = $this->buildClient();
+        $promiseA = $client->connect(self::HOSTNAME, 12345, null, 1);
+        $promiseB = $client->connect(self::HOSTNAME, 12345, null, 1);
+
+        $this->assertSame($promiseA, $promiseB);
+    }
+
+    /**
      * Test that client's connection state is updated correctly when connected.
      *
      * @depends test_connect_success
@@ -341,6 +374,36 @@ class ReactMqttClientTest extends TestCase
             ->then(function () use ($client) {
                 $this->assertTrue($client->isConnected());
                 $this->stopLoop();
+            });
+
+        $this->startLoop();
+    }
+
+    /**
+     * Test that client's disconnect method correctly handles the case where the client is not connected.
+     */
+    public function test_disconnect_when_not_connected(): void
+    {
+        $client = $this->buildClient();
+        $client->disconnect()->then(function () use ($client) {
+            $this->assertFalse($client->isConnected(), 'Client should be disconnected');
+        });
+    }
+
+    /**
+     * Test that disconnecting a client twice returns the same promise.
+     */
+    public function test_disconnect_twice(): void
+    {
+        $client = $this->buildClient();
+        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+            ->then(function () use ($client) {
+                $promiseA = $client->disconnect();
+                $promiseB = $client->disconnect();
+
+                $this->stopLoop();
+
+                $this->assertSame($promiseA, $promiseB);
             });
 
         $this->startLoop();
@@ -607,12 +670,13 @@ class ReactMqttClientTest extends TestCase
                             return $message->getPayload();
                         };
 
-                        $client->publishPeriodically(1, $message, $generator)
-                            ->progress(function (Message $message) {
-                                $this->log(
-                                    sprintf('Progress: %s => %s', $message->getTopic(), $message->getPayload())
-                                );
-                            });
+                        $onProgress = function (Message $message) {
+                            $this->log(
+                                sprintf('Progress: %s => %s', $message->getTopic(), $message->getPayload())
+                            );
+                        };
+
+                        $client->publishPeriodically(1, $message, $generator, $onProgress);
                     });
             });
 
