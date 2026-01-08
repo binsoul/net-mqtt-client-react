@@ -265,14 +265,14 @@ class ReactMqttClientTest extends TestCase
                     ->then(function () use ($client, $message) {
                         // Publish
                         $client->publish($message)
-                            ->otherwise(function () {
-                                $this->fail('Failed to publish message.');
+                            ->catch(function () {
                                 $this->stopLoop();
+                                $this->fail('Failed to publish message.');
                             });
                     })
-                    ->otherwise(function () {
-                        $this->fail('Failed to subscribe to topic.');
+                    ->catch(function () {
                         $this->stopLoop();
+                        $this->fail('Failed to subscribe to topic.');
                     });
             });
 
@@ -294,7 +294,7 @@ class ReactMqttClientTest extends TestCase
                 $this->assertTrue($client->isConnected());
                 $this->stopLoop();
             })
-            ->otherwise(function () use ($client) {
+            ->catch(function () use ($client) {
                 $this->assertFalse($client->isConnected());
                 $this->stopLoop();
             });
@@ -315,7 +315,7 @@ class ReactMqttClientTest extends TestCase
                 $this->assertTrue($client->isConnected());
                 $this->stopLoop();
             })
-            ->otherwise(function () use ($client) {
+            ->catch(function () use ($client) {
                 $this->assertFalse($client->isConnected());
                 $this->stopLoop();
             });
@@ -333,7 +333,7 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
 
         $client->on('connect', function () use ($client) {
-            $this->assertTrue($client->isConnected(), 'Client is should be connected');
+            $this->assertTrue($client->isConnected(), 'Client should be connected');
             $this->stopLoop();
         });
 
@@ -473,13 +473,13 @@ class ReactMqttClientTest extends TestCase
                     ->then(function () use ($client, $subscription) {
                         // Subscribe
                         $client->subscribe($subscription)
-                            ->otherwise(function () {
-                                $this->fail('Failed to subscribe to topic.');
+                            ->catch(function () {
                                 $this->stopLoop();
+                                $this->fail('Failed to subscribe to topic.');
                             });
-                    })->otherwise(function () {
-                        $this->fail('Failed to publish to topic.');
+                    })->catch(function () {
                         $this->stopLoop();
+                        $this->fail('Failed to publish to topic.');
                     });
             });
 
@@ -525,9 +525,9 @@ class ReactMqttClientTest extends TestCase
                                 $failingClient->getStream()->close();
                             });
                     })
-                    ->otherwise(function () {
-                        $this->fail('Failed to subscribe to will topic.');
+                    ->catch(function () {
                         $this->stopLoop();
+                        $this->fail('Failed to subscribe to will topic.');
                     });
             });
 
