@@ -96,7 +96,7 @@ $client->connect('test.mosquitto.org')->then(
             ->then(function (Subscription $subscription) {
                 echo sprintf("Subscribe: %s\n", $subscription->getFilter());
             })
-            ->otherwise(function (\Exception $e) {
+            ->catch(function (\Exception $e) {
                 echo sprintf("Error: %s\n", $e->getMessage());
             });
 
@@ -105,7 +105,7 @@ $client->connect('test.mosquitto.org')->then(
             ->then(function (Message $message) {
                 echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
             })
-            ->otherwise(function (\Exception $e) {
+            ->catch(function (\Exception $e) {
                 echo sprintf("Error: %s\n", $e->getMessage());
             });
 
@@ -118,7 +118,7 @@ $client->connect('test.mosquitto.org')->then(
             ->progress(function (Message $message) {
                 echo sprintf("Publish: %s => %s\n", $message->getTopic(), $message->getPayload());
             })
-            ->otherwise(function (\Exception $e) {
+            ->catch(function (\Exception $e) {
                 echo sprintf("Error: %s\n", $e->getMessage());
             });
     }
