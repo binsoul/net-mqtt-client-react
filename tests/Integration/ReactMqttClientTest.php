@@ -78,7 +78,7 @@ class ReactMqttClientTest extends TestCase
         // Add loop timeout
         $this->loop->addPeriodicTimer(
             self::MAXIMUM_EXECUTION_TIME,
-            function () {
+            function (): void {
                 $this->loop->stop();
                 $this->fail('Test timeout');
             }
@@ -106,13 +106,13 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
             )
             ->catch(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
@@ -131,13 +131,13 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, 12345, null, 1)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
             )
             ->catch(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
@@ -154,9 +154,9 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     $client->connect(self::HOSTNAME, 12345, null, 1)->then(
-                        function () use ($client) {
+                        function () use ($client): void {
                             self::assertTrue($client->isConnected(), 'Client should be connected');
                         }
                     );
@@ -164,7 +164,7 @@ class ReactMqttClientTest extends TestCase
                 }
             )
             ->catch(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
@@ -199,7 +199,7 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'connect',
-            function () use ($client) {
+            function () use ($client): void {
                 self::assertTrue($client->isConnected(), 'Client should be connected');
                 $this->stopLoop();
             }
@@ -207,7 +207,7 @@ class ReactMqttClientTest extends TestCase
 
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
@@ -223,7 +223,7 @@ class ReactMqttClientTest extends TestCase
     {
         $client = $this->buildClient();
         $client->disconnect()->then(
-            function () use ($client) {
+            function () use ($client): void {
                 self::assertFalse($client->isConnected(), 'Client should be disconnected');
             }
         );
@@ -237,7 +237,7 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     $promiseA = $client->disconnect();
                     $promiseB = $client->disconnect();
 
@@ -261,7 +261,7 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'disconnect',
-            function () use ($client) {
+            function () use ($client): void {
                 self::assertFalse($client->isConnected(), 'Client should be disconnected');
                 $this->stopLoop();
             }
@@ -269,10 +269,10 @@ class ReactMqttClientTest extends TestCase
 
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client) {
+                function () use ($client): void {
                     $client->disconnect()
                         ->then(
-                            function () use ($client) {
+                            function () use ($client): void {
                                 self::assertFalse($client->isConnected());
                                 $this->stopLoop();
                             }
@@ -361,7 +361,7 @@ class ReactMqttClientTest extends TestCase
         // Listen for messages
         $client->on(
             'message',
-            function (Message $receivedMessage) use ($client, $message) {
+            function (Message $receivedMessage) use ($client, $message): void {
                 if ($receivedMessage->getPayload() === '') {
                     // clean retained message
                     return;
@@ -374,7 +374,7 @@ class ReactMqttClientTest extends TestCase
                 // Cleanup retained message on broker
                 $client->publish($message->withPayload('')->withQosLevel(1))
                     ->always(
-                        function () {
+                        function (): void {
                             $this->stopLoop();
                         }
                     );
@@ -383,23 +383,23 @@ class ReactMqttClientTest extends TestCase
 
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client, $subscription, $message) {
+                function () use ($client, $subscription, $message): void {
                     // Here we do the reverse - we publish first! (Retained msg)
                     $client->publish($message)
                         // Now we subscribe and listen on the given topic
                         ->then(
-                            function () use ($client, $subscription) {
+                            function () use ($client, $subscription): void {
                                 // Subscribe
                                 $client->subscribe($subscription)
                                     ->catch(
-                                        function () {
+                                        function (): void {
                                             $this->stopLoop();
                                             $this->fail('Failed to subscribe to topic.');
                                         }
                                     );
                             }
                         )->catch(
-                            function () {
+                            function (): void {
                                 $this->stopLoop();
                                 $this->fail('Failed to publish to topic.');
                             }
@@ -428,7 +428,7 @@ class ReactMqttClientTest extends TestCase
         // Listen for messages
         $regularClient->on(
             'message',
-            function (Message $receivedMessage) use ($will) {
+            function (Message $receivedMessage) use ($will): void {
                 self::assertSame($will->getTopic(), $receivedMessage->getTopic(), 'Incorrect will topic');
                 self::assertSame($will->getPayload(), $receivedMessage->getPayload(), 'Incorrect will message');
                 $this->stopLoop();
@@ -438,10 +438,10 @@ class ReactMqttClientTest extends TestCase
         // Connect
         $regularClient->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($regularClient, $will) {
+                function () use ($regularClient, $will): void {
                     $regularClient->subscribe(new DefaultSubscription($will->getTopic(), $will->getQosLevel()))
                         ->then(
-                            function () use ($will) {
+                            function () use ($will): void {
                                 // In order to test that a will is published, we create a
                                 // specialised client, which is going to fail its
                                 // connection on purpose.
@@ -449,7 +449,7 @@ class ReactMqttClientTest extends TestCase
 
                                 $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will), self::CONNECT_TIMEOUT)
                                     ->then(
-                                        static function () use ($failingClient) {
+                                        static function () use ($failingClient): void {
                                             // NOTE: This is the only way we can force the
                                             // the broker to publish the will.
                                             if ($failingClient->getStream() !== null) {
@@ -460,7 +460,7 @@ class ReactMqttClientTest extends TestCase
                             }
                         )
                         ->catch(
-                            function () {
+                            function (): void {
                                 $this->stopLoop();
                                 $this->fail('Failed to subscribe to will topic.');
                             }
@@ -489,7 +489,7 @@ class ReactMqttClientTest extends TestCase
         // Listen for messages
         $client->on(
             'message',
-            function (Message $receivedMessage) use ($subscription, $messages, &$count) {
+            function (Message $receivedMessage) use ($subscription, $messages, &$count): void {
                 $count++;
 
                 self::assertSame($subscription->getFilter(), $receivedMessage->getTopic(), 'Incorrect topic');
@@ -505,11 +505,11 @@ class ReactMqttClientTest extends TestCase
         // Connect
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                static function () use ($client, $subscription, $messages) {
+                static function () use ($client, $subscription, $messages): void {
                     // Subscribe
                     $client->subscribe($subscription)
                         ->then(
-                            static function (Subscription $subscription) use ($client, $messages) {
+                            static function (Subscription $subscription) use ($client, $messages): void {
                                 // Publish message A
                                 $client->publish(new DefaultMessage($subscription->getFilter(), $messages[0]));
                                 // Publish message B
@@ -536,7 +536,7 @@ class ReactMqttClientTest extends TestCase
         // Listen for messages
         $client->on(
             'message',
-            function (Message $receivedMessage) use ($message) {
+            function (Message $receivedMessage) use ($message): void {
                 self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
                 self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
                 $this->stopLoop();
@@ -546,17 +546,15 @@ class ReactMqttClientTest extends TestCase
         // Connect
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client, $subscription, $message) {
+                function () use ($client, $subscription, $message): void {
                     // Subscribe
                     $client->subscribe($subscription)
                         ->then(
-                            function () use ($client, $message) {
+                            function () use ($client, $message): void {
                                 // Publish periodically
-                                $generator = static function () use ($message) {
-                                    return $message->getPayload();
-                                };
+                                $generator = (static fn(): string => $message->getPayload());
 
-                                $onProgress = function (Message $message) {
+                                $onProgress = function (Message $message): void {
                                     $this->log(
                                         sprintf('Progress: %s => %s', $message->getTopic(), $message->getPayload())
                                     );
@@ -584,15 +582,15 @@ class ReactMqttClientTest extends TestCase
         // Connect
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client, $subscription) {
+                function () use ($client, $subscription): void {
                     // Subscribe
                     $client->subscribe($subscription)
                         ->then(
-                            function (Subscription $subscription) use ($client) {
+                            function (Subscription $subscription) use ($client): void {
                                 // Unsubscribe
                                 $client->unsubscribe($subscription)
                                     ->then(
-                                        function (Subscription $s) use ($subscription) {
+                                        function (Subscription $s) use ($subscription): void {
                                             self::assertEquals($subscription->getFilter(), $s->getFilter());
                                             $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
                                             $this->stopLoop();
@@ -636,11 +634,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Logs the given message.
-     *
-     * @param string $message
-     * @param string $clientName
      */
-    private function log($message, $clientName = ''): void
+    private function log(string $message, string $clientName = ''): void
     {
         echo date('H:i:s') . ' - ' . $message . ($clientName !== '' ? ' (' . $clientName . ' client)' : '') . PHP_EOL;
     }
@@ -660,14 +655,14 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'open',
-            function () use ($name) {
+            function () use ($name): void {
                 $this->log(sprintf('Open: %s:%d', self::HOSTNAME, self::PORT), $name);
             }
         );
 
         $client->on(
             'close',
-            function () use ($name, $isPrimary) {
+            function () use ($name, $isPrimary): void {
                 $this->log(sprintf('Close: %s:%d', self::HOSTNAME, self::PORT), $name);
 
                 if ($isPrimary) {
@@ -678,21 +673,21 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'connect',
-            function (Connection $connection) use ($name) {
+            function (Connection $connection) use ($name): void {
                 $this->log(sprintf('Connect: client=%s', $connection->getClientID()), $name);
             }
         );
 
         $client->on(
             'disconnect',
-            function (Connection $connection) use ($name) {
+            function (Connection $connection) use ($name): void {
                 $this->log(sprintf('Disconnect: client=%s', $connection->getClientID()), $name);
             }
         );
 
         $client->on(
             'message',
-            function (Message $message) use ($name) {
+            function (Message $message) use ($name): void {
                 $this->log(
                     sprintf(
                         'Message: %s => %s, QoS=%d, dup=%d, retain=%d',
@@ -709,7 +704,7 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'publish',
-            function (Message $message) use ($name) {
+            function (Message $message) use ($name): void {
                 $this->log(
                     sprintf(
                         'Publish: %s => %s, QoS=%d, dup=%d, retain=%d',
@@ -726,7 +721,7 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'subscribe',
-            function (Subscription $subscription) use ($name) {
+            function (Subscription $subscription) use ($name): void {
                 $this->log(
                     sprintf(
                         'Subscribe: %s, QoS=%d',
@@ -740,14 +735,14 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'warning',
-            function (Exception $e) use ($name) {
+            function (Exception $e) use ($name): void {
                 $this->log(sprintf('Warning: %s', $e->getMessage()), $name);
             }
         );
 
         $client->on(
             'error',
-            function (Exception $e, ReactMqttClient $client) use ($name) {
+            function (Exception $e, ReactMqttClient $client) use ($name): void {
                 $this->log(sprintf('Error: %s', $e->getMessage()), $name);
 
                 if (! $client->isConnected()) {
@@ -773,7 +768,7 @@ class ReactMqttClientTest extends TestCase
         // Listen for messages
         $client->on(
             'message',
-            function (Message $receivedMessage) use ($message) {
+            function (Message $receivedMessage) use ($message): void {
                 self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
                 self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
                 $this->stopLoop();
@@ -783,15 +778,15 @@ class ReactMqttClientTest extends TestCase
         // Connect
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client, $subscription, $message) {
+                function () use ($client, $subscription, $message): void {
                     // Subscribe
                     $client->subscribe($subscription)
                         ->then(
-                            function () use ($client, $message) {
+                            function () use ($client, $message): void {
                                 // Publish
                                 $client->publish($message)
                                     ->catch(
-                                        function () {
+                                        function (): void {
                                             $this->stopLoop();
                                             $this->fail('Failed to publish message.');
                                         }
@@ -799,7 +794,7 @@ class ReactMqttClientTest extends TestCase
                             }
                         )
                         ->catch(
-                            function () {
+                            function (): void {
                                 $this->stopLoop();
                                 $this->fail('Failed to subscribe to topic.');
                             }

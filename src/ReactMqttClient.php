@@ -115,7 +115,7 @@ class ReactMqttClient extends EventEmitter
         $this->parser = $parser ?? new StreamParser(new DefaultPacketFactory());
 
         $this->parser->onError(
-            function (Throwable $error) {
+            function (Throwable $error): void {
                 $this->emitWarning($error);
             }
         );
@@ -193,14 +193,14 @@ class ReactMqttClient extends EventEmitter
 
         $this->establishConnection($this->host, $this->port, $timeout)
             ->then(
-                function (DuplexStreamInterface $stream) use ($connection, $deferred, $timeout) {
+                function (DuplexStreamInterface $stream) use ($connection, $deferred, $timeout): void {
                     $this->stream = $stream;
 
                     $this->emit('open', [$connection, $this]);
 
                     $this->registerClient($connection, $timeout)
                         ->then(
-                            function ($result) use ($connection, $deferred) {
+                            function ($result) use ($connection, $deferred): void {
                                 $this->isConnecting = false;
                                 $this->connectionDeferred = null;
                                 $this->isConnected = true;
@@ -211,7 +211,7 @@ class ReactMqttClient extends EventEmitter
                             }
                         )
                         ->catch(
-                            function (Throwable $reason) use ($connection, $deferred) {
+                            function (Throwable $reason) use ($connection, $deferred): void {
                                 $this->isConnecting = false;
                                 $this->connectionDeferred = null;
 
@@ -228,7 +228,7 @@ class ReactMqttClient extends EventEmitter
                 }
             )
             ->catch(
-                function (Throwable $reason) use ($deferred) {
+                function (Throwable $reason) use ($deferred): void {
                     $this->isConnecting = false;
                     $this->connectionDeferred = null;
 
@@ -264,7 +264,7 @@ class ReactMqttClient extends EventEmitter
         $isResolved = false;
         $flowResult = null;
 
-        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved, &$flowResult) {
+        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved, &$flowResult): void {
             if (! $isResolved) {
                 $isResolved = true;
 
@@ -278,12 +278,12 @@ class ReactMqttClient extends EventEmitter
 
         $this->startFlow($this->flowFactory->buildOutgoingDisconnectFlow($this->connection), true)
             ->then(
-                function ($result) use ($timeout, &$flowResult) {
+                function ($result) use ($timeout, &$flowResult): void {
                     $flowResult = $result;
 
                     $this->timer[] = $this->loop->addTimer(
                         $timeout,
-                        function () {
+                        function (): void {
                             if ($this->stream !== null) {
                                 $this->stream->close();
                             }
@@ -292,7 +292,7 @@ class ReactMqttClient extends EventEmitter
                 }
             )
             ->catch(
-                function ($exception) use ($deferred, &$isResolved) {
+                function (\Throwable $exception) use ($deferred, &$isResolved): void {
                     if (! $isResolved) {
                         $isResolved = true;
                         $this->isDisconnecting = false;
@@ -330,12 +330,12 @@ class ReactMqttClient extends EventEmitter
 
         $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]))
             ->then(
-                static function (array $subscriptions) use ($deferred) {
+                static function (array $subscriptions) use ($deferred): void {
                     $deferred->resolve(array_shift($subscriptions));
                 }
             )
             ->catch(
-                static function ($exception) use ($deferred) {
+                static function (\Throwable $exception) use ($deferred): void {
                     $deferred->reject($exception);
                 }
             );
@@ -368,14 +368,14 @@ class ReactMqttClient extends EventEmitter
 
         $this->timer[] = $this->loop->addPeriodicTimer(
             $interval,
-            function () use ($message, $generator, $onProgress, $deferred) {
+            function () use ($message, $generator, $onProgress, $deferred): void {
                 $this->publish($message->withPayload((string) $generator($message->getTopic())))->then(
-                    static function ($value) use ($onProgress) {
+                    static function ($value) use ($onProgress): void {
                         if ($onProgress !== null) {
                             $onProgress($value);
                         }
                     },
-                    static function (Throwable $reason) use ($deferred) {
+                    static function (Throwable $reason) use ($deferred): void {
                         $deferred->reject($reason);
                     }
                 );
@@ -411,7 +411,7 @@ class ReactMqttClient extends EventEmitter
         $future = null;
         $timer = $this->loop->addTimer(
             $timeout,
-            static function () use ($deferred, $timeout, &$future) {
+            static function () use ($deferred, $timeout, &$future): void {
                 $exception = new RuntimeException(sprintf('Connection timed out after %d seconds.', $timeout));
                 $deferred->reject($exception);
 
@@ -425,29 +425,29 @@ class ReactMqttClient extends EventEmitter
 
         $future = $this->connector->connect($host . ':' . $port)
             ->finally(
-                function () use ($timer) {
+                function () use ($timer): void {
                     $this->loop->cancelTimer($timer);
                 }
             )
             ->then(
-                function (DuplexStreamInterface $stream) use ($deferred) {
+                function (DuplexStreamInterface $stream) use ($deferred): void {
                     $stream->on(
                         'data',
-                        function ($data) {
+                        function (string $data): void {
                             $this->handleReceive($data);
                         }
                     );
 
                     $stream->on(
                         'close',
-                        function () {
+                        function (): void {
                             $this->handleClose();
                         }
                     );
 
                     $stream->on(
                         'error',
-                        function (Throwable $error) {
+                        function (Throwable $error): void {
                             $this->handleError($error);
                         }
                     );
@@ -456,7 +456,7 @@ class ReactMqttClient extends EventEmitter
                 }
             )
             ->catch(
-                static function (Throwable $reason) use ($deferred) {
+                static function (Throwable $reason) use ($deferred): void {
                     $deferred->reject($reason);
                 }
             );
@@ -473,7 +473,7 @@ class ReactMqttClient extends EventEmitter
 
         $responseTimer = $this->loop->addTimer(
             $timeout,
-            static function () use ($deferred, $timeout) {
+            static function () use ($deferred, $timeout): void {
                 $exception = new RuntimeException(sprintf('No response after %d seconds.', $timeout));
                 $deferred->reject($exception);
             }
@@ -481,14 +481,14 @@ class ReactMqttClient extends EventEmitter
 
         $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true)
             ->finally(
-                function () use ($responseTimer) {
+                function () use ($responseTimer): void {
                     $this->loop->cancelTimer($responseTimer);
                 }
             )->then(
-                function ($result) use ($connection, $deferred) {
+                function ($result) use ($connection, $deferred): void {
                     $this->timer[] = $this->loop->addPeriodicTimer(
                         floor($connection->getKeepAlive() * 0.75),
-                        function () {
+                        function (): void {
                             $this->startFlow($this->flowFactory->buildOutgoingPingFlow());
                         }
                     );
@@ -496,7 +496,7 @@ class ReactMqttClient extends EventEmitter
                     $deferred->resolve($result ?: $connection);
                 }
             )->catch(
-                static function (Throwable $reason) use ($deferred) {
+                static function (Throwable $reason) use ($deferred): void {
                     $deferred->reject($reason);
                 }
             );
@@ -598,7 +598,7 @@ class ReactMqttClient extends EventEmitter
             $this->writtenFlow = null;
         }
 
-        if (count($this->sendingFlows) > 0) {
+        if ($this->sendingFlows !== []) {
             $this->writtenFlow = array_shift($this->sendingFlows);
             $this->stream->write($this->writtenFlow->getPacket());
         }
@@ -606,7 +606,7 @@ class ReactMqttClient extends EventEmitter
         if ($flow !== null) {
             if ($flow->isFinished()) {
                 $this->loop->futureTick(
-                    function () use ($flow) {
+                    function () use ($flow): void {
                         $this->finishFlow($flow);
                     }
                 );
@@ -660,10 +660,10 @@ class ReactMqttClient extends EventEmitter
     {
         try {
             $packet = $flow->start();
-        } catch (Throwable $t) {
-            $this->emitError($t);
+        } catch (Throwable $throwable) {
+            $this->emitError($throwable);
 
-            return reject($t);
+            return reject($throwable);
         }
 
         $deferred = new Deferred();
@@ -679,7 +679,7 @@ class ReactMqttClient extends EventEmitter
             }
         } else {
             $this->loop->futureTick(
-                function () use ($internalFlow) {
+                function () use ($internalFlow): void {
                     $this->finishFlow($internalFlow);
                 }
             );
@@ -695,8 +695,8 @@ class ReactMqttClient extends EventEmitter
     {
         try {
             $response = $flow->next($packet);
-        } catch (Throwable $t) {
-            $this->emitError($t);
+        } catch (Throwable $throwable) {
+            $this->emitError($throwable);
 
             return;
         }
@@ -711,7 +711,7 @@ class ReactMqttClient extends EventEmitter
             }
         } elseif ($flow->isFinished()) {
             $this->loop->futureTick(
-                function () use ($flow) {
+                function () use ($flow): void {
                     $this->finishFlow($flow);
                 }
             );
