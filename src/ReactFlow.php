@@ -15,6 +15,9 @@ class ReactFlow implements Flow
 {
     private Flow $decorated;
 
+    /**
+     * @var Deferred<mixed>
+     */
     private Deferred $deferred;
 
     private ?Packet $packet;
@@ -23,6 +26,8 @@ class ReactFlow implements Flow
 
     /**
      * Constructs an instance of this class.
+     *
+     * @param Deferred<mixed> $deferred
      */
     public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false)
     {
@@ -78,6 +83,8 @@ class ReactFlow implements Flow
 
     /**
      * Returns the associated deferred.
+     *
+     * @return Deferred<mixed>
      */
     public function getDeferred(): Deferred
     {

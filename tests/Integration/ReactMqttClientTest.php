@@ -106,8 +106,9 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
-                function () use ($client): void {
-                    self::assertTrue($client->isConnected());
+                function (?Connection $connection) use ($client): void {
+                    self::assertTrue($client->isConnected(), 'Client should be connected');
+                    self::assertNotNull($connection, 'Connection should be an object');
                     $this->stopLoop();
                 }
             )
@@ -131,8 +132,9 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->connect(self::HOSTNAME, 12345, null, 1)
             ->then(
-                function () use ($client): void {
-                    self::assertTrue($client->isConnected());
+                function (?Connection $connection) use ($client): void {
+                    self::assertFalse($client->isConnected());
+                    self::assertNull($connection);
                     $this->stopLoop();
                 }
             )
@@ -156,8 +158,9 @@ class ReactMqttClientTest extends TestCase
             ->then(
                 function () use ($client): void {
                     $client->connect(self::HOSTNAME, 12345, null, 1)->then(
-                        function () use ($client): void {
+                        function (?Connection $connection) use ($client): void {
                             self::assertTrue($client->isConnected(), 'Client should be connected');
+                            self::assertNotNull($connection, 'Connection should be an object');
                         }
                     );
                     $this->stopLoop();
@@ -199,8 +202,9 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'connect',
-            function () use ($client): void {
+            function (Connection $connection) use ($client): void {
                 self::assertTrue($client->isConnected(), 'Client should be connected');
+                self::assertNotNull($connection, 'Connection should be an object');
                 $this->stopLoop();
             }
         );
@@ -223,8 +227,9 @@ class ReactMqttClientTest extends TestCase
     {
         $client = $this->buildClient();
         $client->disconnect()->then(
-            function () use ($client): void {
+            function (?Connection $connection) use ($client): void {
                 self::assertFalse($client->isConnected(), 'Client should be disconnected');
+                self::assertNull($connection, 'Connection should be null');
             }
         );
     }
@@ -261,8 +266,9 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'disconnect',
-            function () use ($client): void {
+            function (Connection $connection) use ($client): void {
                 self::assertFalse($client->isConnected(), 'Client should be disconnected');
+                self::assertNotNull($connection, 'Connection should be an object');
                 $this->stopLoop();
             }
         );
@@ -272,8 +278,9 @@ class ReactMqttClientTest extends TestCase
                 function () use ($client): void {
                     $client->disconnect()
                         ->then(
-                            function () use ($client): void {
+                            function (?Connection $connection) use ($client): void {
                                 self::assertFalse($client->isConnected());
+                                self::assertNotNull($connection);
                                 $this->stopLoop();
                             }
                         );
@@ -552,7 +559,7 @@ class ReactMqttClientTest extends TestCase
                         ->then(
                             function () use ($client, $message): void {
                                 // Publish periodically
-                                $generator = (static fn(): string => $message->getPayload());
+                                $generator = (static fn (): string => $message->getPayload());
 
                                 $onProgress = function (Message $message): void {
                                     $this->log(
@@ -655,15 +662,15 @@ class ReactMqttClientTest extends TestCase
 
         $client->on(
             'open',
-            function () use ($name): void {
-                $this->log(sprintf('Open: %s:%d', self::HOSTNAME, self::PORT), $name);
+            function (Connection $connection, ReactMqttClient $client) use ($name): void {
+                $this->log(sprintf('Open: %s:%d', $client->getHost(), $client->getPort()), $name);
             }
         );
 
         $client->on(
             'close',
-            function () use ($name, $isPrimary): void {
-                $this->log(sprintf('Close: %s:%d', self::HOSTNAME, self::PORT), $name);
+            function (Connection $connection, ReactMqttClient $client) use ($name, $isPrimary): void {
+                $this->log(sprintf('Close: %s:%d', $client->getHost(), $client->getPort()), $name);
 
                 if ($isPrimary) {
                     $this->loop->stop();
@@ -782,7 +789,9 @@ class ReactMqttClientTest extends TestCase
                     // Subscribe
                     $client->subscribe($subscription)
                         ->then(
-                            function () use ($client, $message): void {
+                            function (Subscription $result) use ($client, $subscription, $message): void {
+                                self::assertEquals($subscription->getFilter(), $result->getFilter());
+
                                 // Publish
                                 $client->publish($message)
                                     ->catch(

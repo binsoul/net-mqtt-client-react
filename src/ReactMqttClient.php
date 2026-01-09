@@ -70,10 +70,16 @@ class ReactMqttClient extends EventEmitter
 
     private bool $isConnecting = false;
 
+    /**
+     * @var Deferred<Connection|null>|null
+     */
     private ?Deferred $connectionDeferred = null;
 
     private bool $isDisconnecting = false;
 
+    /**
+     * @var Deferred<Connection|null>|null
+     */
     private ?Deferred $disconnectionDeferred = null;
 
     /**
@@ -104,12 +110,13 @@ class ReactMqttClient extends EventEmitter
      * Constructs an instance of this class.
      */
     public function __construct(
-        ConnectorInterface $connector,
-        LoopInterface $loop,
+        ConnectorInterface         $connector,
+        LoopInterface              $loop,
         ?ClientIdentifierGenerator $identifierGenerator = null,
-        ?FlowFactory $flowFactory = null,
-        ?StreamParser $parser = null
-    ) {
+        ?FlowFactory               $flowFactory = null,
+        ?StreamParser              $parser = null
+    )
+    {
         $this->connector = $connector;
         $this->loop = $loop;
         $this->parser = $parser ?? new StreamParser(new DefaultPacketFactory());
@@ -159,7 +166,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * Connects to a broker.
      *
-     * @return PromiseInterface<Connection>
+     * @return PromiseInterface<Connection|null>
      */
     public function connect(string $host, int $port = 1883, ?Connection $connection = null, int $timeout = 5): PromiseInterface
     {
@@ -176,8 +183,9 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->isConnecting = true;
-        $this->connectionDeferred = new Deferred();
-        $deferred = $this->connectionDeferred;
+        /** @var Deferred<Connection|null> $deferred */
+        $deferred = new Deferred();
+        $this->connectionDeferred = $deferred;
 
         $this->isConnected = false;
         $this->host = $host;
@@ -200,7 +208,7 @@ class ReactMqttClient extends EventEmitter
 
                     $this->registerClient($connection, $timeout)
                         ->then(
-                            function ($result) use ($connection, $deferred): void {
+                            function (?Connection $result) use ($connection, $deferred): void {
                                 $this->isConnecting = false;
                                 $this->connectionDeferred = null;
                                 $this->isConnected = true;
@@ -242,10 +250,14 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Disconnects from a broker.
+     *
+     * @return PromiseInterface<Connection|null>
      */
     public function disconnect(int $timeout = 5): PromiseInterface
     {
-        if (! $this->isConnected) {
+        if (!$this->isConnected || $this->connection === null) {
+            $this->isConnected = false;
+
             return resolve($this->connection);
         }
 
@@ -258,17 +270,19 @@ class ReactMqttClient extends EventEmitter
         }
 
         $this->isDisconnecting = true;
-        $this->disconnectionDeferred = new Deferred();
-        $deferred = $this->disconnectionDeferred;
+        /** @var Deferred<Connection|null> $deferred */
+        $deferred = new Deferred();
+        $this->disconnectionDeferred = $deferred;
 
         $isResolved = false;
+        /** @var Connection|null $flowResult */
         $flowResult = null;
 
-        $this->onCloseCallback = function ($connection) use ($deferred, &$isResolved, &$flowResult): void {
-            if (! $isResolved) {
+        $this->onCloseCallback = function (?Connection $connection) use ($deferred, &$isResolved, &$flowResult): void {
+            if (!$isResolved) {
                 $isResolved = true;
 
-                if ($connection) {
+                if ($connection !== null) {
                     $this->emit('disconnect', [$connection, $this]);
                 }
 
@@ -276,101 +290,124 @@ class ReactMqttClient extends EventEmitter
             }
         };
 
-        $this->startFlow($this->flowFactory->buildOutgoingDisconnectFlow($this->connection), true)
-            ->then(
-                function ($result) use ($timeout, &$flowResult): void {
-                    $flowResult = $result;
+        /** @var PromiseInterface<Connection|null> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingDisconnectFlow($this->connection), true);
+        $promise->then(
+            function (?Connection $result) use ($timeout, &$flowResult): void {
+                $flowResult = $result;
 
-                    $this->timer[] = $this->loop->addTimer(
-                        $timeout,
-                        function (): void {
-                            if ($this->stream !== null) {
-                                $this->stream->close();
-                            }
+                $this->timer[] = $this->loop->addTimer(
+                    $timeout,
+                    function (): void {
+                        if ($this->stream !== null) {
+                            $this->stream->close();
                         }
-                    );
-                }
-            )
-            ->catch(
-                function (\Throwable $exception) use ($deferred, &$isResolved): void {
-                    if (! $isResolved) {
-                        $isResolved = true;
-                        $this->isDisconnecting = false;
-                        $this->disconnectionDeferred = null;
-                        $deferred->reject($exception);
                     }
+                );
+            }
+        )->catch(
+            function (Throwable $exception) use ($deferred, &$isResolved): void {
+                if (!$isResolved) {
+                    $isResolved = true;
+                    $this->isDisconnecting = false;
+                    $this->disconnectionDeferred = null;
+                    $deferred->reject($exception);
                 }
-            );
+            }
+        );
 
         return $deferred->promise();
     }
 
     /**
      * Subscribes to a topic filter.
+     *
+     * @return PromiseInterface<Subscription>
      */
     public function subscribe(Subscription $subscription): PromiseInterface
     {
-        if (! $this->isConnected) {
+        if (!$this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]));
+        /** @var PromiseInterface<Subscription> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]));
+
+        return $promise;
     }
 
     /**
      * Unsubscribes from a topic filter.
+     *
+     * @return PromiseInterface<Subscription>
      */
     public function unsubscribe(Subscription $subscription): PromiseInterface
     {
-        if (! $this->isConnected) {
+        if (!$this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
+        /** @var Deferred<Subscription> $deferred */
         $deferred = new Deferred();
 
-        $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]))
-            ->then(
-                static function (array $subscriptions) use ($deferred): void {
-                    $deferred->resolve(array_shift($subscriptions));
+        /** @var PromiseInterface<array<int, Subscription>> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]));
+        $promise->then(
+            static function (array $subscriptions) use ($deferred): void {
+                $subscription = array_shift($subscriptions);
+
+                if ($subscription instanceof Subscription) {
+                    $deferred->resolve($subscription);
                 }
-            )
-            ->catch(
-                static function (\Throwable $exception) use ($deferred): void {
-                    $deferred->reject($exception);
-                }
-            );
+            }
+        )->catch(
+            static function (Throwable $exception) use ($deferred): void {
+                $deferred->reject($exception);
+            }
+        );
 
         return $deferred->promise();
     }
 
     /**
      * Publishes a message.
+     *
+     * @return PromiseInterface<Message>
      */
     public function publish(Message $message): PromiseInterface
     {
-        if (! $this->isConnected) {
+        if (!$this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
-        return $this->startFlow($this->flowFactory->buildOutgoingPublishFlow($message));
+        /** @var PromiseInterface<Message> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingPublishFlow($message));
+
+        return $promise;
     }
 
     /**
      * Calls the given generator periodically and publishes the return value.
+     *
+     * @param callable(string): (string|int|bool|null) $generator
+     * @param (callable(Message): void)|null $onProgress
+     *
+     * @return PromiseInterface<never>
      */
     public function publishPeriodically(int $interval, Message $message, callable $generator, callable $onProgress = null): PromiseInterface
     {
-        if (! $this->isConnected) {
+        if (!$this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
+        /** @var Deferred<never> $deferred */
         $deferred = new Deferred();
 
         $this->timer[] = $this->loop->addPeriodicTimer(
             $interval,
             function () use ($message, $generator, $onProgress, $deferred): void {
-                $this->publish($message->withPayload((string) $generator($message->getTopic())))->then(
-                    static function ($value) use ($onProgress): void {
+                $this->publish($message->withPayload((string)$generator($message->getTopic())))->then(
+                    static function (Message $value) use ($onProgress): void {
                         if ($onProgress !== null) {
                             $onProgress($value);
                         }
@@ -403,12 +440,17 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Establishes a network connection to a server.
+     *
+     * @return PromiseInterface<DuplexStreamInterface>
      */
     private function establishConnection(string $host, int $port, int $timeout): PromiseInterface
     {
+        /** @var Deferred<DuplexStreamInterface> $deferred */
         $deferred = new Deferred();
 
+        /** @var PromiseInterface<ConnectorInterface>|null $future */
         $future = null;
+
         $timer = $this->loop->addTimer(
             $timeout,
             static function () use ($deferred, $timeout, &$future): void {
@@ -466,9 +508,12 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Registers a new client with the broker.
+     *
+     * @return PromiseInterface<Connection|null>
      */
     private function registerClient(Connection $connection, int $timeout): PromiseInterface
     {
+        /** @var Deferred<Connection|null> $deferred */
         $deferred = new Deferred();
 
         $responseTimer = $this->loop->addTimer(
@@ -479,27 +524,28 @@ class ReactMqttClient extends EventEmitter
             }
         );
 
-        $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true)
-            ->finally(
-                function () use ($responseTimer): void {
-                    $this->loop->cancelTimer($responseTimer);
-                }
-            )->then(
-                function ($result) use ($connection, $deferred): void {
-                    $this->timer[] = $this->loop->addPeriodicTimer(
-                        floor($connection->getKeepAlive() * 0.75),
-                        function (): void {
-                            $this->startFlow($this->flowFactory->buildOutgoingPingFlow());
-                        }
-                    );
+        /** @var PromiseInterface<Connection|null> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingConnectFlow($connection), true);
+        $promise->finally(
+            function () use ($responseTimer): void {
+                $this->loop->cancelTimer($responseTimer);
+            }
+        )->then(
+            function (?Connection $result) use ($connection, $deferred): void {
+                $this->timer[] = $this->loop->addPeriodicTimer(
+                    floor($connection->getKeepAlive() * 0.75),
+                    function (): void {
+                        $this->startFlow($this->flowFactory->buildOutgoingPingFlow());
+                    }
+                );
 
-                    $deferred->resolve($result ?: $connection);
-                }
-            )->catch(
-                static function (Throwable $reason) use ($deferred): void {
-                    $deferred->reject($reason);
-                }
-            );
+                $deferred->resolve($result ?: $connection);
+            }
+        )->catch(
+            static function (Throwable $reason) use ($deferred): void {
+                $deferred->reject($reason);
+            }
+        );
 
         return $deferred->promise();
     }
@@ -509,7 +555,7 @@ class ReactMqttClient extends EventEmitter
      */
     private function handleReceive(string $data): void
     {
-        if (! $this->isConnected && ! $this->isConnecting) {
+        if (!$this->isConnected && !$this->isConnecting) {
             return;
         }
 
@@ -535,7 +581,7 @@ class ReactMqttClient extends EventEmitter
     {
         switch ($packet->getPacketType()) {
             case Packet::TYPE_PUBLISH:
-                if (! ($packet instanceof PublishRequestPacket)) {
+                if (!($packet instanceof PublishRequestPacket)) {
                     throw new RuntimeException(sprintf('Expected %s but got %s.', PublishRequestPacket::class, get_class($packet)));
                 }
 
@@ -572,7 +618,7 @@ class ReactMqttClient extends EventEmitter
                     }
                 }
 
-                if (! $flowFound) {
+                if (!$flowFound) {
                     $this->emitWarning(
                         new LogicException(sprintf('Received unexpected packet of type %d.', $packet->getPacketType()))
                     );
@@ -600,7 +646,10 @@ class ReactMqttClient extends EventEmitter
 
         if ($this->sendingFlows !== []) {
             $this->writtenFlow = array_shift($this->sendingFlows);
-            $this->stream->write($this->writtenFlow->getPacket());
+
+            if ($this->writtenFlow !== null && $this->stream !== null) {
+                $this->stream->write($this->writtenFlow->getPacket());
+            }
         }
 
         if ($flow !== null) {
@@ -655,6 +704,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Starts the given flow.
+     *
+     * @return PromiseInterface<mixed>
      */
     private function startFlow(Flow $flow, bool $isSilent = false): PromiseInterface
     {
@@ -673,7 +724,10 @@ class ReactMqttClient extends EventEmitter
             if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $internalFlow;
             } else {
-                $this->stream->write($packet);
+                if ($this->stream !== null) {
+                    $this->stream->write($packet);
+                }
+
                 $this->writtenFlow = $internalFlow;
                 $this->handleSend();
             }
@@ -705,7 +759,10 @@ class ReactMqttClient extends EventEmitter
             if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $flow;
             } else {
-                $this->stream->write($response);
+                if ($this->stream !== null) {
+                    $this->stream->write($response);
+                }
+
                 $this->writtenFlow = $flow;
                 $this->handleSend();
             }
@@ -724,7 +781,7 @@ class ReactMqttClient extends EventEmitter
     private function finishFlow(ReactFlow $flow): void
     {
         if ($flow->isSuccess()) {
-            if (! $flow->isSilent()) {
+            if (!$flow->isSilent()) {
                 $this->emit($flow->getCode(), [$flow->getResult(), $this]);
             }
 
