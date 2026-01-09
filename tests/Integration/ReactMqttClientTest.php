@@ -134,13 +134,13 @@ class ReactMqttClientTest extends TestCase
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
                 function () use ($client) {
-                    $this->assertTrue($client->isConnected());
+                    self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
             )
             ->catch(
                 function () use ($client) {
-                    $this->assertFalse($client->isConnected());
+                    self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
             );
@@ -159,13 +159,13 @@ class ReactMqttClientTest extends TestCase
         $client->connect(self::HOSTNAME, 12345, null, 1)
             ->then(
                 function () use ($client) {
-                    $this->assertTrue($client->isConnected());
+                    self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
             )
             ->catch(
                 function () use ($client) {
-                    $this->assertFalse($client->isConnected());
+                    self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
             );
@@ -184,7 +184,7 @@ class ReactMqttClientTest extends TestCase
                 function () use ($client) {
                     $client->connect(self::HOSTNAME, 12345, null, 1)->then(
                         function () use ($client) {
-                            $this->assertTrue($client->isConnected(), 'Client should be connected');
+                            self::assertTrue($client->isConnected(), 'Client should be connected');
                         }
                     );
                     $this->stopLoop();
@@ -192,7 +192,7 @@ class ReactMqttClientTest extends TestCase
             )
             ->catch(
                 function () use ($client) {
-                    $this->assertFalse($client->isConnected());
+                    self::assertFalse($client->isConnected());
                     $this->stopLoop();
                 }
             );
@@ -209,7 +209,7 @@ class ReactMqttClientTest extends TestCase
         $promiseA = $client->connect(self::HOSTNAME, 12345, null, 1);
         $promiseB = $client->connect(self::HOSTNAME, 12345, null, 1);
 
-        $this->assertSame($promiseA, $promiseB);
+        self::assertSame($promiseA, $promiseB);
     }
 
     /**
@@ -224,7 +224,7 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'connect',
             function () use ($client) {
-                $this->assertTrue($client->isConnected(), 'Client should be connected');
+                self::assertTrue($client->isConnected(), 'Client should be connected');
                 $this->stopLoop();
             }
         );
@@ -232,7 +232,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
                 function () use ($client) {
-                    $this->assertTrue($client->isConnected());
+                    self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
             );
@@ -248,7 +248,7 @@ class ReactMqttClientTest extends TestCase
         $client = $this->buildClient();
         $client->disconnect()->then(
             function () use ($client) {
-                $this->assertFalse($client->isConnected(), 'Client should be disconnected');
+                self::assertFalse($client->isConnected(), 'Client should be disconnected');
             }
         );
     }
@@ -267,7 +267,7 @@ class ReactMqttClientTest extends TestCase
 
                     $this->stopLoop();
 
-                    $this->assertSame($promiseA, $promiseB);
+                    self::assertSame($promiseA, $promiseB);
                 }
             );
 
@@ -286,7 +286,7 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'disconnect',
             function () use ($client) {
-                $this->assertFalse($client->isConnected(), 'Client should be disconnected');
+                self::assertFalse($client->isConnected(), 'Client should be disconnected');
                 $this->stopLoop();
             }
         );
@@ -297,7 +297,7 @@ class ReactMqttClientTest extends TestCase
                     $client->disconnect()
                         ->then(
                             function () use ($client) {
-                                $this->assertFalse($client->isConnected());
+                                self::assertFalse($client->isConnected());
                                 $this->stopLoop();
                             }
                         );
@@ -391,9 +391,9 @@ class ReactMqttClientTest extends TestCase
                     return;
                 }
 
-                $this->assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
-                $this->assertTrue($receivedMessage->isRetained(), 'Message should be retained');
+                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
+                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+                self::assertTrue($receivedMessage->isRetained(), 'Message should be retained');
 
                 // Cleanup retained message on broker
                 $client->publish($message->withPayload('')->withQosLevel(1))
@@ -453,8 +453,8 @@ class ReactMqttClientTest extends TestCase
         $regularClient->on(
             'message',
             function (Message $receivedMessage) use ($will) {
-                $this->assertSame($will->getTopic(), $receivedMessage->getTopic(), 'Incorrect will topic');
-                $this->assertSame($will->getPayload(), $receivedMessage->getPayload(), 'Incorrect will message');
+                self::assertSame($will->getTopic(), $receivedMessage->getTopic(), 'Incorrect will topic');
+                self::assertSame($will->getPayload(), $receivedMessage->getPayload(), 'Incorrect will message');
                 $this->stopLoop();
             }
         );
@@ -476,7 +476,9 @@ class ReactMqttClientTest extends TestCase
                                         static function () use ($failingClient) {
                                             // NOTE: This is the only way we can force the
                                             // the broker to publish the will.
-                                            $failingClient->getStream()->close();
+                                            if ($failingClient->getStream() !== null) {
+                                                $failingClient->getStream()->close();
+                                            }
                                         }
                                     );
                             }
@@ -514,8 +516,8 @@ class ReactMqttClientTest extends TestCase
             function (Message $receivedMessage) use ($subscription, $messages, &$count) {
                 $count++;
 
-                $this->assertSame($subscription->getFilter(), $receivedMessage->getTopic(), 'Incorrect topic');
-                $this->assertContains($receivedMessage->getPayload(), $messages, 'Unknown payload');
+                self::assertSame($subscription->getFilter(), $receivedMessage->getTopic(), 'Incorrect topic');
+                self::assertContains($receivedMessage->getPayload(), $messages, 'Unknown payload');
 
                 // If we receive 2 (or perhaps more), stop...
                 if ($count >= 2) {
@@ -559,8 +561,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'message',
             function (Message $receivedMessage) use ($message) {
-                $this->assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
+                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
                 $this->stopLoop();
             }
         );
@@ -615,7 +617,7 @@ class ReactMqttClientTest extends TestCase
                                 $client->unsubscribe($subscription)
                                     ->then(
                                         function (Subscription $s) use ($subscription) {
-                                            $this->assertEquals($subscription->getFilter(), $s->getFilter());
+                                            self::assertEquals($subscription->getFilter(), $s->getFilter());
                                             $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
                                             $this->stopLoop();
                                         }
@@ -796,8 +798,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'message',
             function (Message $receivedMessage) use ($message) {
-                $this->assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                $this->assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
+                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
                 $this->stopLoop();
             }
         );
