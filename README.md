@@ -34,7 +34,7 @@ use React\Socket\TcpConnector;
 include 'vendor/autoload.php';
 
 // Setup client
-$loop = \React\EventLoop\Factory::create();
+$loop = \React\EventLoop\Loop::get();
 $dnsResolverFactory = new \React\Dns\Resolver\Factory();
 $connector = new DnsConnector(new TcpConnector($loop), $dnsResolverFactory->createCached('8.8.8.8', $loop));
 $client = new ReactMqttClient($connector, $loop);
@@ -89,7 +89,7 @@ $client->on('error', function (\Exception $e) use ($loop) {
 });
 
 // Connect to broker
-$client->connect('test.mosquitto.org')->then(
+$client->connect('broker.hivemq.com')->then(
     function () use ($client) {
         // Subscribe to all topics
         $client->subscribe(new DefaultSubscription('#'))

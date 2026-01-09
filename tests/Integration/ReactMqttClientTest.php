@@ -13,9 +13,7 @@ use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
 use Exception;
 use PHPUnit\Framework\TestCase;
-use React\Dns\Resolver\Factory as DNSResolverFactory;
-use React\Dns\Resolver\Resolver;
-use React\EventLoop\Factory as EventLoopFactory;
+use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Socket\Connector;
 
@@ -29,20 +27,13 @@ use React\Socket\Connector;
 class ReactMqttClientTest extends TestCase
 {
     /**
-     * Nameserver.
-     *
-     * @var string
-     */
-    private const NAMESERVER = '8.8.8.8';
-
-    /**
      * Hostname.
      *
      * @see http://iot.eclipse.org/getting-started
      *
      * @var string
      */
-    private const HOSTNAME = 'test.mosquitto.org';
+    private const HOSTNAME = 'broker.hivemq.com';
 
     /**
      * Port.
@@ -75,32 +66,14 @@ class ReactMqttClientTest extends TestCase
      */
     private const MAXIMUM_EXECUTION_TIME = 60;
 
-    /**
-     * Event loop.
-     *
-     * @var LoopInterface
-     */
-    private $loop;
+    private LoopInterface $loop;
 
-    /**
-     * DNS resolver.
-     *
-     * @var Resolver
-     */
-    private $resolver;
-
-    /**
-     * @var ReactMqttClient
-     */
-    private $client;
+    private ReactMqttClient $client;
 
     protected function setUp(): void
     {
         // Create event loop
-        $this->loop = EventLoopFactory::create();
-
-        // DNS Resolver
-        $this->resolver = (new DNSResolverFactory())->createCached(self::NAMESERVER, $this->loop);
+        $this->loop = Loop::get();
 
         // Add loop timeout
         $this->loop->addPeriodicTimer(
@@ -210,6 +183,9 @@ class ReactMqttClientTest extends TestCase
         $promiseB = $client->connect(self::HOSTNAME, 12345, null, 1);
 
         self::assertSame($promiseA, $promiseB);
+
+        $this->startLoop();
+        $this->stopLoop();
     }
 
     /**
