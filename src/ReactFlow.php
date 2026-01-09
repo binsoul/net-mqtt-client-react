@@ -13,14 +13,13 @@ use React\Promise\Deferred;
  */
 class ReactFlow implements Flow
 {
-    /** @var Flow */
-    private $decorated;
-    /** @var Deferred */
-    private $deferred;
-    /** @var Packet|null */
-    private $packet;
-    /** @var bool */
-    private $isSilent;
+    private Flow $decorated;
+
+    private Deferred $deferred;
+
+    private ?Packet $packet;
+
+    private bool $isSilent;
 
     /**
      * Constructs an instance of this class.

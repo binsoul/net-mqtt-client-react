@@ -25,9 +25,10 @@
         "react/socket": "^1.3"
     },
     "require-dev": {
+        "binsoul/coding-standard": "^1",
+        "phpstan/phpstan": "^2",
         "phpunit/phpunit": "^9",
-        "friendsofphp/php-cs-fixer": "^3",
-        "phpstan/phpstan": "^2"
+        "roave/security-advisories": "dev-latest"
     },
     "autoload": {
         "psr-4": {
@@ -44,15 +45,17 @@
     },
     "scripts": {
         "test": "phpunit",
-        "fix-style": [
-            "php-cs-fixer fix src --rules=@Symfony,-yoda_style",
-            "php-cs-fixer fix tests --rules=@Symfony,-yoda_style"
-        ],
-        "analyze": "phpstan analyse -l 7 src"
+        "fix-style": "ecs check src tests --config vendor/binsoul/coding-standard/easy-coding-standard.php --fix",
+        "analyze": "phpstan analyse -l max src"
     },
     "extra": {
         "branch-alias": {
             "dev-master": "1.0-dev"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
         }
     }
 }
