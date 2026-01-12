@@ -116,6 +116,7 @@ class ReactMqttClientTest extends TestCase
                 function () use ($client): void {
                     self::assertFalse($client->isConnected());
                     $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -157,19 +158,26 @@ class ReactMqttClientTest extends TestCase
         $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
             ->then(
                 function () use ($client): void {
-                    $client->connect(self::HOSTNAME, 12345, null, 1)->then(
-                        function (?Connection $connection) use ($client): void {
-                            self::assertTrue($client->isConnected(), 'Client should be connected');
-                            self::assertNotNull($connection, 'Connection should be an object');
-                        }
-                    );
+                    $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+                        ->then(
+                            function (?Connection $connection) use ($client): void {
+                                self::assertTrue($client->isConnected(), 'Client should be connected');
+                                self::assertNotNull($connection, 'Connection should be an object');
+                            }
+                        )
+                        ->catch(
+                            function (): void {
+                                $this->stopLoop();
+                                $this->fail('Failed to connect.');
+                            }
+                        );
                     $this->stopLoop();
                 }
             )
             ->catch(
-                function () use ($client): void {
-                    self::assertFalse($client->isConnected());
+                function (): void {
                     $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -186,6 +194,12 @@ class ReactMqttClientTest extends TestCase
         $promiseB = $client->connect(self::HOSTNAME, 12345, null, 1);
 
         self::assertSame($promiseA, $promiseB);
+
+        $noop = function (): void {
+        };
+
+        $promiseA->catch($noop);
+        $promiseB->catch($noop);
 
         $this->startLoop();
         $this->stopLoop();
@@ -215,6 +229,12 @@ class ReactMqttClientTest extends TestCase
                     self::assertTrue($client->isConnected());
                     $this->stopLoop();
                 }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
+                }
             );
 
         $this->startLoop();
@@ -226,12 +246,13 @@ class ReactMqttClientTest extends TestCase
     public function test_disconnect_when_not_connected(): void
     {
         $client = $this->buildClient();
-        $client->disconnect()->then(
-            function (?Connection $connection) use ($client): void {
-                self::assertFalse($client->isConnected(), 'Client should be disconnected');
-                self::assertNull($connection, 'Connection should be null');
-            }
-        );
+        $client->disconnect()
+            ->then(
+                function (?Connection $connection) use ($client): void {
+                    self::assertFalse($client->isConnected(), 'Client should be disconnected');
+                    self::assertNull($connection, 'Connection should be null');
+                }
+            );
     }
 
     /**
@@ -249,6 +270,12 @@ class ReactMqttClientTest extends TestCase
                     $this->stopLoop();
 
                     self::assertSame($promiseA, $promiseB);
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -284,6 +311,12 @@ class ReactMqttClientTest extends TestCase
                                 $this->stopLoop();
                             }
                         );
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -380,7 +413,7 @@ class ReactMqttClientTest extends TestCase
 
                 // Cleanup retained message on broker
                 $client->publish($message->withPayload('')->withQosLevel(1))
-                    ->always(
+                    ->finally(
                         function (): void {
                             $this->stopLoop();
                         }
@@ -405,12 +438,19 @@ class ReactMqttClientTest extends TestCase
                                         }
                                     );
                             }
-                        )->catch(
+                        )
+                        ->catch(
                             function (): void {
                                 $this->stopLoop();
                                 $this->fail('Failed to publish to topic.');
                             }
                         );
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -463,6 +503,12 @@ class ReactMqttClientTest extends TestCase
                                                 $failingClient->getStream()->close();
                                             }
                                         }
+                                    )
+                                    ->catch(
+                                        function (): void {
+                                            $this->stopLoop();
+                                            $this->fail('Failed to connect client with will.');
+                                        }
                                     );
                             }
                         )
@@ -472,6 +518,12 @@ class ReactMqttClientTest extends TestCase
                                 $this->fail('Failed to subscribe to will topic.');
                             }
                         );
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -524,6 +576,12 @@ class ReactMqttClientTest extends TestCase
                             }
                         );
                 }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
+                }
             );
 
         $this->startLoop();
@@ -571,6 +629,12 @@ class ReactMqttClientTest extends TestCase
                             }
                         );
                 }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
+                }
             );
 
         $this->startLoop();
@@ -605,6 +669,12 @@ class ReactMqttClientTest extends TestCase
                                     );
                             }
                         );
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
@@ -808,6 +878,12 @@ class ReactMqttClientTest extends TestCase
                                 $this->fail('Failed to subscribe to topic.');
                             }
                         );
+                }
+            )
+            ->catch(
+                function (): void {
+                    $this->stopLoop();
+                    $this->fail('Failed to connect.');
                 }
             );
 
