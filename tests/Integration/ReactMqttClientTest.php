@@ -27,30 +27,30 @@ use React\Socket\Connector;
 class ReactMqttClientTest extends TestCase
 {
     /**
-     * Hostname.
+     * The default hostname.
      *
      * @see http://iot.eclipse.org/getting-started
      *
      * @var string
      */
-    private const HOSTNAME = 'broker.hivemq.com';
+    private const DEFAULT_HOSTNAME = 'broker.hivemq.com';
 
     /**
-     * Port.
+     * The default port.
      *
      * 1883, unsecured connection
      * 8883, secure connection
      *
      * @var int
      */
-    private const PORT = 1883;
+    private const DEFAULT_PORT = 1883;
 
     /**
-     * The timeout for the connection attempt.
+     * The default timeout for the connection attempt.
      *
      * @var int
      */
-    private const CONNECT_TIMEOUT = 30;
+    private const DEFAULT_CONNECT_TIMEOUT = 30;
 
     /**
      * The topic prefix.
@@ -66,12 +66,31 @@ class ReactMqttClientTest extends TestCase
      */
     private const MAXIMUM_EXECUTION_TIME = 60;
 
+    /**
+     * The address or domain name of the server.
+     */
+    private string $hostname;
+
+    /**
+     * The port number used for the connection.
+     */
+    private int $port;
+
+    /**
+     * The duration in seconds to wait before connection times out.
+     */
+    private int $connectTimeout;
+
     private LoopInterface $loop;
 
     private ReactMqttClient $client;
 
     protected function setUp(): void
     {
+        $this->hostname = $_ENV['MQTT_HOSTNAME'] ?? $_SERVER['MQTT_HOSTNAME'] ?? self::DEFAULT_HOSTNAME;
+        $this->port = $_ENV['MQTT_PORT'] ?? $_SERVER['MQTT_PORT'] ?? self::DEFAULT_PORT;
+        $this->connectTimeout = $_ENV['MQTT_CONNECT_TIMEOUT'] ?? $_SERVER['MQTT_CONNECT_TIMEOUT'] ?? self::DEFAULT_CONNECT_TIMEOUT;
+
         // Create event loop
         $this->loop = Loop::get();
 
@@ -104,7 +123,7 @@ class ReactMqttClientTest extends TestCase
     public function test_connect_success(): void
     {
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function (?Connection $connection) use ($client): void {
                     self::assertTrue($client->isConnected(), 'Client should be connected');
@@ -131,7 +150,7 @@ class ReactMqttClientTest extends TestCase
     public function test_connect_failure(): void
     {
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, 12345, null, 1)
+        $client->connect($this->hostname, 12345, null, 1)
             ->then(
                 function (?Connection $connection) use ($client): void {
                     self::assertFalse($client->isConnected());
@@ -155,10 +174,10 @@ class ReactMqttClientTest extends TestCase
     public function test_connect_when_already_connected(): void
     {
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client): void {
-                    $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+                    $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
                         ->then(
                             function (?Connection $connection) use ($client): void {
                                 self::assertTrue($client->isConnected(), 'Client should be connected');
@@ -190,8 +209,8 @@ class ReactMqttClientTest extends TestCase
     public function test_connect_twice(): void
     {
         $client = $this->buildClient();
-        $promiseA = $client->connect(self::HOSTNAME, 12345, null, 1);
-        $promiseB = $client->connect(self::HOSTNAME, 12345, null, 1);
+        $promiseA = $client->connect($this->hostname, 12345, null, 1);
+        $promiseB = $client->connect($this->hostname, 12345, null, 1);
 
         self::assertSame($promiseA, $promiseB);
 
@@ -223,7 +242,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client): void {
                     self::assertTrue($client->isConnected());
@@ -261,7 +280,7 @@ class ReactMqttClientTest extends TestCase
     public function test_disconnect_twice(): void
     {
         $client = $this->buildClient();
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client): void {
                     $promiseA = $client->disconnect();
@@ -300,7 +319,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client): void {
                     $client->disconnect()
@@ -421,7 +440,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client, $subscription, $message): void {
                     // Here we do the reverse - we publish first! (Retained msg)
@@ -483,7 +502,7 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Connect
-        $regularClient->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $regularClient->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($regularClient, $will): void {
                     $regularClient->subscribe(new DefaultSubscription($will->getTopic(), $will->getQosLevel()))
@@ -494,7 +513,7 @@ class ReactMqttClientTest extends TestCase
                                 // connection on purpose.
                                 $failingClient = $this->buildClient('failing', false);
 
-                                $failingClient->connect(self::HOSTNAME, self::PORT, (new DefaultConnection())->withWill($will), self::CONNECT_TIMEOUT)
+                                $failingClient->connect($this->hostname, $this->port, (new DefaultConnection())->withWill($will), $this->connectTimeout)
                                     ->then(
                                         static function () use ($failingClient): void {
                                             // NOTE: This is the only way we can force the
@@ -562,7 +581,7 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 static function () use ($client, $subscription, $messages): void {
                     // Subscribe
@@ -609,7 +628,7 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client, $subscription, $message): void {
                     // Subscribe
@@ -651,7 +670,7 @@ class ReactMqttClientTest extends TestCase
         $subscription = $this->generateSubscription();
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client, $subscription): void {
                     // Subscribe
@@ -853,7 +872,7 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Connect
-        $client->connect(self::HOSTNAME, self::PORT, null, self::CONNECT_TIMEOUT)
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client, $subscription, $message): void {
                     // Subscribe
