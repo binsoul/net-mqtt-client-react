@@ -85,6 +85,16 @@ class ReactMqttClientTest extends TestCase
 
     private ReactMqttClient $client;
 
+    /**
+     * @var array<array{mixed, mixed, string}>
+     */
+    private array $expectations = [];
+
+    /**
+     * @var array<int, string>
+     */
+    private array $failures = [];
+
     protected function setUp(): void
     {
         $this->hostname = $_ENV['MQTT_HOSTNAME'] ?? $_SERVER['MQTT_HOSTNAME'] ?? self::DEFAULT_HOSTNAME;
@@ -126,20 +136,21 @@ class ReactMqttClientTest extends TestCase
         $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function (?Connection $connection) use ($client): void {
-                    self::assertTrue($client->isConnected(), 'Client should be connected');
-                    self::assertNotNull($connection, 'Connection should be an object');
+                    $this->addExpectation(true, $client->isConnected(), 'Client should be connected');
+                    $this->addExpectation(true, is_object($connection), 'Connection should be an object');
                     $this->stopLoop();
                 }
             )
             ->catch(
                 function () use ($client): void {
-                    self::assertFalse($client->isConnected());
+                    $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -153,19 +164,20 @@ class ReactMqttClientTest extends TestCase
         $client->connect($this->hostname, 12345, null, 1)
             ->then(
                 function (?Connection $connection) use ($client): void {
-                    self::assertFalse($client->isConnected());
-                    self::assertNull($connection);
+                    $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
+                    $this->addExpectation(true, $connection === null, 'Connection should not be null');
                     $this->stopLoop();
                 }
             )
             ->catch(
                 function () use ($client): void {
-                    self::assertFalse($client->isConnected());
+                    $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
                     $this->stopLoop();
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -180,27 +192,28 @@ class ReactMqttClientTest extends TestCase
                     $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
                         ->then(
                             function (?Connection $connection) use ($client): void {
-                                self::assertTrue($client->isConnected(), 'Client should be connected');
-                                self::assertNotNull($connection, 'Connection should be an object');
+                                $this->addExpectation(true, $client->isConnected(), 'Client should be connected');
+                                $this->addExpectation(true, is_object($connection), 'Connection should be an object');
+                                $this->stopLoop();
                             }
                         )
                         ->catch(
                             function (): void {
+                                $this->addFailure('Failed to connect.');
                                 $this->stopLoop();
-                                $this->fail('Failed to connect.');
                             }
                         );
-                    $this->stopLoop();
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -212,7 +225,7 @@ class ReactMqttClientTest extends TestCase
         $promiseA = $client->connect($this->hostname, 12345, null, 1);
         $promiseB = $client->connect($this->hostname, 12345, null, 1);
 
-        self::assertSame($promiseA, $promiseB);
+        $this->addExpectation(true, $promiseA === $promiseB, 'Promises should be identical');
 
         $noop = function (): void {
         };
@@ -222,6 +235,7 @@ class ReactMqttClientTest extends TestCase
 
         $this->startLoop();
         $this->stopLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -236,8 +250,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'connect',
             function (Connection $connection) use ($client): void {
-                self::assertTrue($client->isConnected(), 'Client should be connected');
-                self::assertNotNull($connection, 'Connection should be an object');
+                $this->addExpectation(true, $client->isConnected(), 'Client should be connected');
+                $this->addExpectation(true, is_object($connection), 'Connection should be an object');
                 $this->stopLoop();
             }
         );
@@ -245,18 +259,19 @@ class ReactMqttClientTest extends TestCase
         $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
             ->then(
                 function () use ($client): void {
-                    self::assertTrue($client->isConnected());
+                    $this->addExpectation(true, $client->isConnected(), 'Client should be connected');
                     $this->stopLoop();
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -268,10 +283,12 @@ class ReactMqttClientTest extends TestCase
         $client->disconnect()
             ->then(
                 function (?Connection $connection) use ($client): void {
-                    self::assertFalse($client->isConnected(), 'Client should be disconnected');
-                    self::assertNull($connection, 'Connection should be null');
+                    $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
+                    $this->addExpectation(true, $connection === null, 'Connection should not be null');
                 }
             );
+
+        $this->handleExpectations();
     }
 
     /**
@@ -286,19 +303,20 @@ class ReactMqttClientTest extends TestCase
                     $promiseA = $client->disconnect();
                     $promiseB = $client->disconnect();
 
-                    $this->stopLoop();
+                    $this->addExpectation(true, $promiseA === $promiseB, 'Promises should be identical');
 
-                    self::assertSame($promiseA, $promiseB);
+                    $this->stopLoop();
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -313,8 +331,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'disconnect',
             function (Connection $connection) use ($client): void {
-                self::assertFalse($client->isConnected(), 'Client should be disconnected');
-                self::assertNotNull($connection, 'Connection should be an object');
+                $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
+                $this->addExpectation(true, is_object($connection), 'Connection should be an object');
                 $this->stopLoop();
             }
         );
@@ -325,8 +343,8 @@ class ReactMqttClientTest extends TestCase
                     $client->disconnect()
                         ->then(
                             function (?Connection $connection) use ($client): void {
-                                self::assertFalse($client->isConnected());
-                                self::assertNotNull($connection);
+                                $this->addExpectation(false, $client->isConnected(), 'Client should not be connected');
+                                $this->addExpectation(true, is_object($connection), 'Connection should be an object');
                                 $this->stopLoop();
                             }
                         );
@@ -334,12 +352,13 @@ class ReactMqttClientTest extends TestCase
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -351,6 +370,7 @@ class ReactMqttClientTest extends TestCase
     {
         $subscription = $this->generateSubscription(0);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=0', 0);
+
         $this->subscribeAndPublish($subscription, $message);
     }
 
@@ -363,6 +383,7 @@ class ReactMqttClientTest extends TestCase
     {
         $subscription = $this->generateSubscription(1);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=1', 1);
+
         $this->subscribeAndPublish($subscription, $message);
     }
 
@@ -375,6 +396,7 @@ class ReactMqttClientTest extends TestCase
     {
         $subscription = $this->generateSubscription(2);
         $message = new DefaultMessage($subscription->getFilter(), 'qos=2', 2);
+
         $this->subscribeAndPublish($subscription, $message);
     }
 
@@ -426,12 +448,17 @@ class ReactMqttClientTest extends TestCase
                     return;
                 }
 
-                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
-                self::assertTrue($receivedMessage->isRetained(), 'Message should be retained');
+                $this->addExpectation($message->getTopic(), $receivedMessage->getTopic(), 'Topics should be the same');
+                $this->addExpectation($message->getPayload(), $receivedMessage->getPayload(), 'Payloads should be the same');
+                $this->addExpectation(true, $receivedMessage->isRetained(), 'Message should be retained');
 
                 // Cleanup retained message on broker
                 $client->publish($message->withPayload('')->withQosLevel(1))
+                    ->catch(
+                        function () {
+                            // ignore
+                        }
+                    )
                     ->finally(
                         function (): void {
                             $this->stopLoop();
@@ -452,28 +479,29 @@ class ReactMqttClientTest extends TestCase
                                 $client->subscribe($subscription)
                                     ->catch(
                                         function (): void {
+                                            $this->addFailure('Failed to subscribe to topic.');
                                             $this->stopLoop();
-                                            $this->fail('Failed to subscribe to topic.');
                                         }
                                     );
                             }
                         )
                         ->catch(
                             function (): void {
+                                $this->addFailure('Failed to publish to topic.');
                                 $this->stopLoop();
-                                $this->fail('Failed to publish to topic.');
                             }
                         );
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -495,8 +523,8 @@ class ReactMqttClientTest extends TestCase
         $regularClient->on(
             'message',
             function (Message $receivedMessage) use ($will): void {
-                self::assertSame($will->getTopic(), $receivedMessage->getTopic(), 'Incorrect will topic');
-                self::assertSame($will->getPayload(), $receivedMessage->getPayload(), 'Incorrect will message');
+                $this->addExpectation($will->getTopic(), $receivedMessage->getTopic(), 'Will topics should be the same');
+                $this->addExpectation($will->getPayload(), $receivedMessage->getPayload(), 'Will payloads should be the same');
                 $this->stopLoop();
             }
         );
@@ -525,28 +553,29 @@ class ReactMqttClientTest extends TestCase
                                     )
                                     ->catch(
                                         function (): void {
+                                            $this->addFailure('Failed to connect client with will.');
                                             $this->stopLoop();
-                                            $this->fail('Failed to connect client with will.');
                                         }
                                     );
                             }
                         )
                         ->catch(
                             function (): void {
+                                $this->addFailure('Failed to subscribe to will topic.');
                                 $this->stopLoop();
-                                $this->fail('Failed to subscribe to will topic.');
                             }
                         );
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -570,8 +599,21 @@ class ReactMqttClientTest extends TestCase
             function (Message $receivedMessage) use ($subscription, $messages, &$count): void {
                 $count++;
 
-                self::assertSame($subscription->getFilter(), $receivedMessage->getTopic(), 'Incorrect topic');
-                self::assertContains($receivedMessage->getPayload(), $messages, 'Unknown payload');
+                $this->addExpectation($subscription->getFilter(), $receivedMessage->getTopic(), 'Topics should be the same');
+
+                $found = false;
+
+                foreach ($messages as $message) {
+                    if ($receivedMessage->getPayload() === $message) {
+                        $found = true;
+
+                        break;
+                    }
+                }
+
+                if (! $found) {
+                    $this->addFailure('Unexpected payload.');
+                }
 
                 // If we receive 2 (or perhaps more), stop...
                 if ($count >= 2) {
@@ -598,12 +640,13 @@ class ReactMqttClientTest extends TestCase
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -621,8 +664,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'message',
             function (Message $receivedMessage) use ($message): void {
-                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+                $this->addExpectation($message->getTopic(), $receivedMessage->getTopic(), 'Topics should be the same');
+                $this->addExpectation($message->getPayload(), $receivedMessage->getPayload(), 'Payloads should be the same');
                 $this->stopLoop();
             }
         );
@@ -651,12 +694,13 @@ class ReactMqttClientTest extends TestCase
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /**
@@ -681,7 +725,7 @@ class ReactMqttClientTest extends TestCase
                                 $client->unsubscribe($subscription)
                                     ->then(
                                         function (Subscription $s) use ($subscription): void {
-                                            self::assertEquals($subscription->getFilter(), $s->getFilter());
+                                            $this->addExpectation($subscription->getFilter(), $s->getFilter(), 'Filters should be the same');
                                             $this->log(sprintf('Unsubscribe: %s', $s->getFilter()));
                                             $this->stopLoop();
                                         }
@@ -692,12 +736,13 @@ class ReactMqttClientTest extends TestCase
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 
     /*******************************************************
@@ -734,6 +779,44 @@ class ReactMqttClientTest extends TestCase
     private function log(string $message, string $clientName = ''): void
     {
         echo date('H:i:s') . ' - ' . $message . ($clientName !== '' ? ' (' . $clientName . ' client)' : '') . PHP_EOL;
+    }
+
+    /**
+     * Stores an expectation.
+     */
+    private function addExpectation($expected, $actual, string $message = ''): void
+    {
+        $this->expectations[] = [$expected, $actual, $message];
+    }
+
+    /**
+     * Stores a failure.
+     */
+    private function addFailure(string $message): void
+    {
+        $this->failures[] = $message;
+    }
+
+    /**
+     * Validates all expectations and handles failures.
+     */
+    private function handleExpectations(): void
+    {
+        foreach ($this->expectations as $expectation) {
+            if (is_bool($expectation[0])) {
+                if ($expectation[0] === true) {
+                    self::assertTrue($expectation[1], $expectation[2]);
+                } else {
+                    self::assertFalse($expectation[1], $expectation[2]);
+                }
+            } else {
+                self::assertEquals($expectation[0], $expectation[1], $expectation[2]);
+            }
+        }
+
+        if (! empty($this->failures)) {
+            self::fail(implode(' / ', $this->failures));
+        }
     }
 
     /**
@@ -865,8 +948,8 @@ class ReactMqttClientTest extends TestCase
         $client->on(
             'message',
             function (Message $receivedMessage) use ($message): void {
-                self::assertSame($message->getTopic(), $receivedMessage->getTopic(), 'Incorrect topic');
-                self::assertSame($message->getPayload(), $receivedMessage->getPayload(), 'Incorrect payload');
+                $this->addExpectation($message->getTopic(), $receivedMessage->getTopic(), 'Topics should be the same');
+                $this->addExpectation($message->getPayload(), $receivedMessage->getPayload(), 'Payloads should be the same');
                 $this->stopLoop();
             }
         );
@@ -879,33 +962,34 @@ class ReactMqttClientTest extends TestCase
                     $client->subscribe($subscription)
                         ->then(
                             function (Subscription $result) use ($client, $subscription, $message): void {
-                                self::assertEquals($subscription->getFilter(), $result->getFilter());
+                                $this->addExpectation($subscription->getFilter(), $result->getFilter(), 'Filters should be the same');
 
                                 // Publish
                                 $client->publish($message)
                                     ->catch(
                                         function (): void {
+                                            $this->addFailure('Failed to publish message.');
                                             $this->stopLoop();
-                                            $this->fail('Failed to publish message.');
                                         }
                                     );
                             }
                         )
                         ->catch(
                             function (): void {
+                                $this->addFailure('Failed to subscribe to topic.');
                                 $this->stopLoop();
-                                $this->fail('Failed to subscribe to topic.');
                             }
                         );
                 }
             )
             ->catch(
                 function (): void {
+                    $this->addFailure('Failed to connect.');
                     $this->stopLoop();
-                    $this->fail('Failed to connect.');
                 }
             );
 
         $this->startLoop();
+        $this->handleExpectations();
     }
 }
