@@ -110,6 +110,9 @@ class ReactFlow implements Flow
         return $this->isSilent;
     }
 
+    /**
+     * Indicates if the flow should force a single result.
+     */
     public function forceSingleResult(): bool
     {
         return $this->forceSingleResult;

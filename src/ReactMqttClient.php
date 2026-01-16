@@ -19,6 +19,7 @@ use BinSoul\Net\Mqtt\Packet\PublishRequestPacket;
 use BinSoul\Net\Mqtt\StreamParser;
 use BinSoul\Net\Mqtt\Subscription;
 use Evenement\EventEmitter;
+use InvalidArgumentException;
 use LogicException;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
@@ -60,8 +61,14 @@ class ReactMqttClient extends EventEmitter
 
     private ClientIdentifierGenerator $identifierGenerator;
 
-    private string $host = '';
+    /**
+     * @var non-empty-string
+     */
+    private string $host = 'localhost';
 
+    /**
+     * @var int<0, 65535>
+     */
     private int $port = 1883;
 
     private ?Connection $connection = null;
@@ -83,7 +90,7 @@ class ReactMqttClient extends EventEmitter
     private ?Deferred $disconnectionDeferred = null;
 
     /**
-     * @var callable|null
+     * @var callable(Connection|null): void|null
      */
     private $onCloseCallback = null;
 
@@ -132,6 +139,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Return the host.
+     *
+     * @return non-empty-string
      */
     public function getHost(): string
     {
@@ -140,6 +149,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Return the port.
+     *
+     * @return int<0, 65535>
      */
     public function getPort(): int
     {
@@ -165,10 +176,26 @@ class ReactMqttClient extends EventEmitter
     /**
      * Connects to a broker.
      *
+     * @param non-empty-string $host
+     * @param int<0, 65535>    $port
+     * @param int<0, max>      $timeout
+     *
      * @return PromiseInterface<Connection|null>
      */
     public function connect(string $host, int $port = 1883, ?Connection $connection = null, int $timeout = 5): PromiseInterface
     {
+        if (trim($host) === '') {
+            throw new InvalidArgumentException('Host cannot be empty.');
+        }
+
+        if ($port < 0 || $port > 65535) {
+            throw new InvalidArgumentException('Expected a port number between 0 and 65535.');
+        }
+
+        if ($timeout < 0) {
+            throw new InvalidArgumentException('Expected a timeout greater than or equal to zero.');
+        }
+
         if ($this->isConnected) {
             return resolve($this->connection);
         }
@@ -250,6 +277,8 @@ class ReactMqttClient extends EventEmitter
     /**
      * Disconnects from a broker.
      *
+     * @param int<0, max> $timeout
+     *
      * @return PromiseInterface<Connection|null>
      */
     public function disconnect(int $timeout = 5): PromiseInterface
@@ -266,6 +295,10 @@ class ReactMqttClient extends EventEmitter
             }
 
             return reject(new LogicException('The client is already disconnecting.'));
+        }
+
+        if ($timeout < 0) {
+            throw new InvalidArgumentException('Expected a timeout greater than or equal to zero.');
         }
 
         $this->isDisconnecting = true;
@@ -427,6 +460,10 @@ class ReactMqttClient extends EventEmitter
     /**
      * Establishes a network connection to a server.
      *
+     * @param non-empty-string $host
+     * @param int<0, 65535>    $port
+     * @param int<0, max>      $timeout
+     *
      * @return PromiseInterface<DuplexStreamInterface>
      */
     private function establishConnection(string $host, int $port, int $timeout): PromiseInterface
@@ -494,6 +531,8 @@ class ReactMqttClient extends EventEmitter
 
     /**
      * Registers a new client with the broker.
+     *
+     * @param int<0, max> $timeout
      *
      * @return PromiseInterface<Connection|null>
      */
