@@ -24,17 +24,20 @@ class ReactFlow implements Flow
 
     private bool $isSilent;
 
+    private bool $forceSingleResult;
+
     /**
      * Constructs an instance of this class.
      *
      * @param Deferred<mixed> $deferred
      */
-    public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false)
+    public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false, bool $forceSingleResult = false)
     {
         $this->decorated = $decorated;
         $this->deferred = $deferred;
         $this->packet = $packet;
         $this->isSilent = $isSilent;
+        $this->forceSingleResult = $forceSingleResult;
     }
 
     public function getCode(): string
@@ -105,5 +108,10 @@ class ReactFlow implements Flow
     public function isSilent(): bool
     {
         return $this->isSilent;
+    }
+
+    public function forceSingleResult(): bool
+    {
+        return $this->forceSingleResult;
     }
 }
