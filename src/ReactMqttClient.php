@@ -238,10 +238,10 @@ class ReactMqttClient extends EventEmitter
                                 $this->isConnecting = false;
                                 $this->connectionDeferred = null;
                                 $this->isConnected = true;
-                                $this->connection = $connection;
+                                $this->connection = $result ?: $connection;
 
-                                $this->emit('connect', [$connection, $this]);
-                                $deferred->resolve($result ?: $connection);
+                                $this->emit('connect', [$this->connection, $this]);
+                                $deferred->resolve($result ?: $this->connection);
                             }
                         )
                         ->catch(
