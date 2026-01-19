@@ -356,16 +356,25 @@ class ReactMqttClient extends EventEmitter
     /**
      * Subscribes to a topic filter.
      *
-     * @return PromiseInterface<Subscription>
+     * @param Subscription|array<int, Subscription> $subscription
+     *
+     * @return PromiseInterface<Subscription|array<int, Subscription>>
+     *
+     * @phpstan-return ($subscription is Subscription ? PromiseInterface<Subscription> : PromiseInterface<array<int, Subscription>>)
      */
-    public function subscribe(Subscription $subscription): PromiseInterface
+    public function subscribe($subscription): PromiseInterface
     {
         if (! $this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
-        /** @var PromiseInterface<Subscription> $promise */
-        $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]), false, true);
+        if (! is_array($subscription)) {
+            /** @var PromiseInterface<Subscription> $promise */
+            $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]), false, true);
+        } else {
+            /** @var PromiseInterface<array<int, Subscription>> $promise */
+            $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow($subscription), false, false);
+        }
 
         return $promise;
     }
@@ -373,16 +382,25 @@ class ReactMqttClient extends EventEmitter
     /**
      * Unsubscribes from a topic filter.
      *
-     * @return PromiseInterface<Subscription>
+     * @param Subscription|array<int, Subscription> $subscription
+     *
+     * @return PromiseInterface<Subscription|Subscription[]>
+     *
+     * @phpstan-return ($subscription is Subscription ? PromiseInterface<Subscription> : PromiseInterface<array<int, Subscription>>)
      */
-    public function unsubscribe(Subscription $subscription): PromiseInterface
+    public function unsubscribe($subscription): PromiseInterface
     {
         if (! $this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
         }
 
-        /** @var PromiseInterface<Subscription> $promise */
-        $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]), false, true);
+        if (! is_array($subscription)) {
+            /** @var PromiseInterface<Subscription> $promise */
+            $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]), false, true);
+        } else {
+            /** @var PromiseInterface<array<int, Subscription>> $promise */
+            $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow($subscription), false, false);
+        }
 
         return $promise;
     }

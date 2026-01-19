@@ -872,14 +872,46 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $subscription = $this->createMock(Subscription::class);
-        $subscribeFlow = $this->createFlowMock();
+        $subscribeFlow = $this->createFlowMock('subscribe', [$subscription]);
 
         $this->flowFactory->expects(self::once())
             ->method('buildOutgoingSubscribeFlow')
             ->with([$subscription])
             ->willReturn($subscribeFlow);
 
-        $client->subscribe($subscription);
+        $result = null;
+        $client->subscribe($subscription)->then(
+            function ($value) use (&$result): void {
+                $result = $value;
+            }
+        );
+
+        self::assertSame($subscription, $result);
+    }
+
+    public function test_subscribe_array_starts_subscribe_flow_when_connected(): void
+    {
+        $client = new ReactMqttClient($this->connector, $this->loop, $this->identifierGenerator, $this->flowFactory);
+
+        $this->setupSuccessfulConnection();
+        $client->connect('localhost');
+
+        $subscriptions = [$this->createMock(Subscription::class), $this->createMock(Subscription::class)];
+        $subscribeFlow = $this->createFlowMock('subscribe', $subscriptions);
+
+        $this->flowFactory->expects(self::once())
+            ->method('buildOutgoingSubscribeFlow')
+            ->with($subscriptions)
+            ->willReturn($subscribeFlow);
+
+        $result = null;
+        $client->subscribe($subscriptions)->then(
+            function ($value) use (&$result): void {
+                $result = $value;
+            }
+        );
+
+        self::assertSame($subscriptions, $result);
     }
 
     public function test_unsubscribe_rejects_when_not_connected(): void
@@ -908,14 +940,46 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $subscription = $this->createMock(Subscription::class);
-        $unsubscribeFlow = $this->createFlowMock();
+        $unsubscribeFlow = $this->createFlowMock('unsubscribe', [$subscription]);
 
         $this->flowFactory->expects(self::once())
             ->method('buildOutgoingUnsubscribeFlow')
             ->with([$subscription])
             ->willReturn($unsubscribeFlow);
 
-        $client->unsubscribe($subscription);
+        $result = null;
+        $client->unsubscribe($subscription)->then(
+            function ($value) use (&$result): void {
+                $result = $value;
+            }
+        );
+
+        self::assertSame($subscription, $result);
+    }
+
+    public function test_unsubscribe_array_starts_unsubscribe_flow_when_connected(): void
+    {
+        $client = new ReactMqttClient($this->connector, $this->loop, $this->identifierGenerator, $this->flowFactory);
+
+        $this->setupSuccessfulConnection();
+        $client->connect('localhost');
+
+        $subscriptions = [$this->createMock(Subscription::class), $this->createMock(Subscription::class)];
+        $unsubscribeFlow = $this->createFlowMock('unsubscribe', $subscriptions);
+
+        $this->flowFactory->expects(self::once())
+            ->method('buildOutgoingUnsubscribeFlow')
+            ->with($subscriptions)
+            ->willReturn($unsubscribeFlow);
+
+        $result = null;
+        $client->unsubscribe($subscriptions)->then(
+            function ($value) use (&$result): void {
+                $result = $value;
+            }
+        );
+
+        self::assertSame($subscriptions, $result);
     }
 
     public function test_publish_rejects_when_not_connected(): void
@@ -958,7 +1022,7 @@ class ReactMqttClientTest extends TestCase
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn(string $topic): string => 'generated';
+        $generator = static fn (string $topic): string => 'generated';
 
         $rejected = false;
         $rejectionReason = null;
@@ -981,7 +1045,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn(string $topic): string => 'generated';
+        $generator = static fn (string $topic): string => 'generated';
 
         $this->loop->expects(self::once())
             ->method('addPeriodicTimer')
@@ -1041,7 +1105,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn(string $topic): string => 'generated';
+        $generator = static fn (string $topic): string => 'generated';
 
         $onProgressCalled = false;
         $onProgress = static function () use (&$onProgressCalled): void {
@@ -2020,16 +2084,15 @@ class ReactMqttClientTest extends TestCase
         return $flow;
     }
 
-    private function createFlowMock(): Flow
+    private function createFlowMock(?string $code = 'test', $result = null): Flow
     {
         $flow = $this->createMock(Flow::class);
         $packet = $this->createMock(Packet::class);
         $flow->method('start')->willReturn($packet);
         $flow->method('isFinished')->willReturn(true);
         $flow->method('isSuccess')->willReturn(true);
-        $flow->method('getCode')->willReturn('test');
-        // Return a default message for publish flows
-        $flow->method('getResult')->willReturn(new DefaultMessage('test/topic', 'payload'));
+        $flow->method('getCode')->willReturn($code);
+        $flow->method('getResult')->willReturn($result ?? new DefaultMessage('test/topic', 'payload'));
 
         return $flow;
     }

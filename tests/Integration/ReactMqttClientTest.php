@@ -401,6 +401,72 @@ class ReactMqttClientTest extends TestCase
     }
 
     /**
+     * Tests that a client can subscribe to multiple filters at once and receive messages.
+     *
+     * @depends test_send_and_receive_message_qos_level_0
+     */
+    public function test_subscribe_and_publish_multiple(): void
+    {
+        $client = $this->buildClient();
+
+        $subscriptions = [
+            $this->generateSubscription(),
+            $this->generateSubscription(),
+        ];
+
+        $receivedMessages = 0;
+        $client->on(
+            'message',
+            function (Message $message) use ($subscriptions, &$receivedMessages): void {
+                foreach ($subscriptions as $subscription) {
+                    if ($message->getTopic() === $subscription->getFilter()) {
+                        $receivedMessages++;
+
+                        break;
+                    }
+                }
+
+                if ($receivedMessages === 2) {
+                    $this->addExpectation(2, $receivedMessages, 'Should have received 2 messages');
+                    $this->stopLoop();
+                }
+            }
+        );
+
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
+            ->then(
+                function () use ($client, $subscriptions): void {
+                    $client->subscribe($subscriptions)
+                        ->then(
+                            function (array $results) use ($client, $subscriptions): void {
+                                $this->addExpectation(2, count($results), 'Should return 2 results');
+                                $this->addExpectation($subscriptions[0]->getFilter(), $results[0]->getFilter(), 'First filter matches');
+                                $this->addExpectation($subscriptions[1]->getFilter(), $results[1]->getFilter(), 'Second filter matches');
+
+                                $client->publish(new DefaultMessage($subscriptions[0]->getFilter(), 'payload 1'));
+                                $client->publish(new DefaultMessage($subscriptions[1]->getFilter(), 'payload 2'));
+                            }
+                        )
+                        ->catch(
+                            function (Exception $e): void {
+                                $this->addFailure('Subscribe failed: ' . $e->getMessage());
+                                $this->stopLoop();
+                            }
+                        );
+                }
+            )
+            ->catch(
+                function (Exception $e): void {
+                    $this->addFailure('Connect failed: ' . $e->getMessage());
+                    $this->stopLoop();
+                }
+            );
+
+        $this->startLoop();
+        $this->handleExpectations();
+    }
+
+    /**
      * Test that client can to subscribe to a single level wildcard filter, e.g. /A/B/+/C.
      *
      * @depends test_connect_success
@@ -737,6 +803,61 @@ class ReactMqttClientTest extends TestCase
             ->catch(
                 function (): void {
                     $this->addFailure('Failed to connect.');
+                    $this->stopLoop();
+                }
+            );
+
+        $this->startLoop();
+        $this->handleExpectations();
+    }
+
+    /**
+     * Tests that a client can unsubscribe from multiple filters at once.
+     *
+     * @depends test_unsubscribe
+     */
+    public function test_unsubscribe_multiple(): void
+    {
+        $client = $this->buildClient();
+        $subscriptions = [
+            $this->generateSubscription(),
+            $this->generateSubscription(),
+        ];
+
+        $client->connect($this->hostname, $this->port, null, $this->connectTimeout)
+            ->then(
+                function () use ($client, $subscriptions): void {
+                    $client->subscribe($subscriptions)
+                        ->then(
+                            function () use ($client, $subscriptions): void {
+                                $client->unsubscribe($subscriptions)
+                                    ->then(
+                                        function (array $results) use ($subscriptions): void {
+                                            $this->addExpectation(2, count($results), 'Should return 2 results after unsubscribe');
+                                            $this->addExpectation($subscriptions[0]->getFilter(), $results[0]->getFilter(), 'First unsubscribed filter matches');
+                                            $this->addExpectation($subscriptions[1]->getFilter(), $results[1]->getFilter(), 'Second unsubscribed filter matches');
+                                            $this->stopLoop();
+                                        }
+                                    )
+                                    ->catch(
+                                        function (Exception $e): void {
+                                            $this->addFailure('Unsubscribe failed: ' . $e->getMessage());
+                                            $this->stopLoop();
+                                        }
+                                    );
+                            }
+                        )
+                        ->catch(
+                            function (Exception $e): void {
+                                $this->addFailure('Subscribe failed: ' . $e->getMessage());
+                                $this->stopLoop();
+                            }
+                        );
+                }
+            )
+            ->catch(
+                function (Exception $e): void {
+                    $this->addFailure('Connect failed: ' . $e->getMessage());
                     $this->stopLoop();
                 }
             );
