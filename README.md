@@ -117,7 +117,7 @@ $client->on(
 $client->connect('broker.hivemq.com')->then(
     function () use ($client) {
         // Subscribe to all topics
-        $client->subscribe(new DefaultSubscription('#'))
+        $client->subscribe(new DefaultSubscription('/#'))
             ->then(
                 function (Subscription $subscription) {
                     echo sprintf("Subscribe: %s\n", $subscription->getFilter());
