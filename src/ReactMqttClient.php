@@ -84,7 +84,7 @@ class ReactMqttClient extends EventEmitter
     /**
      * @var callable(Connection|null): void|null
      */
-    private $onCloseCallback = null;
+    private $onCloseCallback;
 
     /**
      * @var TimerInterface[]
@@ -111,13 +111,12 @@ class ReactMqttClient extends EventEmitter
      * Constructs an instance of this class.
      */
     public function __construct(
-        private readonly ConnectorInterface        $connector,
-        private readonly LoopInterface             $loop,
+        private readonly ConnectorInterface $connector,
+        private readonly LoopInterface $loop,
         private readonly ClientIdentifierGenerator $identifierGenerator = new DefaultIdentifierGenerator(),
-        ?FlowFactory                               $flowFactory = null,
-        ?StreamParser                              $parser = null
-    )
-    {
+        ?FlowFactory $flowFactory = null,
+        ?StreamParser $parser = null
+    ) {
         $this->parser = $parser ?? new StreamParser(new DefaultPacketFactory());
 
         $this->parser->onError(
@@ -363,10 +362,12 @@ class ReactMqttClient extends EventEmitter
         if (! is_array($subscription)) {
             /** @var PromiseInterface<Subscription> $promise */
             $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow([$subscription]), false, true);
-        } else {
-            /** @var PromiseInterface<array<int, Subscription>> $promise */
-            $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow($subscription), false, false);
+
+            return $promise;
         }
+
+        /** @var PromiseInterface<array<int, Subscription>> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingSubscribeFlow($subscription), false, false);
 
         return $promise;
     }
@@ -376,7 +377,7 @@ class ReactMqttClient extends EventEmitter
      *
      * @param Subscription|array<int, Subscription> $subscription
      *
-     * @return PromiseInterface<Subscription|Subscription[]>
+     * @return PromiseInterface<Subscription|array<int, Subscription>>
      *
      * @phpstan-return ($subscription is Subscription ? PromiseInterface<Subscription> : PromiseInterface<array<int, Subscription>>)
      */
@@ -389,10 +390,12 @@ class ReactMqttClient extends EventEmitter
         if (! is_array($subscription)) {
             /** @var PromiseInterface<Subscription> $promise */
             $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow([$subscription]), false, true);
-        } else {
-            /** @var PromiseInterface<array<int, Subscription>> $promise */
-            $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow($subscription), false, false);
+
+            return $promise;
         }
+
+        /** @var PromiseInterface<array<int, Subscription>> $promise */
+        $promise = $this->startFlow($this->flowFactory->buildOutgoingUnsubscribeFlow($subscription), false, false);
 
         return $promise;
     }
@@ -620,7 +623,7 @@ class ReactMqttClient extends EventEmitter
         switch ($packet->getPacketType()) {
             case Packet::TYPE_PUBLISH:
                 if (! ($packet instanceof PublishRequestPacket)) {
-                    throw new RuntimeException(sprintf('Expected %s but got %s.', PublishRequestPacket::class, get_class($packet)));
+                    throw new RuntimeException(sprintf('Expected %s but got %s.', PublishRequestPacket::class, $packet::class));
                 }
 
                 $message = new DefaultMessage(
