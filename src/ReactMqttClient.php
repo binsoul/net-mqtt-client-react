@@ -51,15 +51,7 @@ use Throwable;
  */
 class ReactMqttClient extends EventEmitter
 {
-    private ConnectorInterface $connector;
-
-    private LoopInterface $loop;
-
     private ?DuplexStreamInterface $stream = null;
-
-    private StreamParser $parser;
-
-    private ClientIdentifierGenerator $identifierGenerator;
 
     /**
      * @var non-empty-string
@@ -111,20 +103,21 @@ class ReactMqttClient extends EventEmitter
 
     private ?ReactFlow $writtenFlow = null;
 
-    private FlowFactory $flowFactory;
+    private readonly StreamParser $parser;
+
+    private readonly FlowFactory $flowFactory;
 
     /**
      * Constructs an instance of this class.
      */
     public function __construct(
-        ConnectorInterface $connector,
-        LoopInterface $loop,
-        ?ClientIdentifierGenerator $identifierGenerator = null,
-        ?FlowFactory $flowFactory = null,
-        ?StreamParser $parser = null
-    ) {
-        $this->connector = $connector;
-        $this->loop = $loop;
+        private readonly ConnectorInterface        $connector,
+        private readonly LoopInterface             $loop,
+        private readonly ClientIdentifierGenerator $identifierGenerator = new DefaultIdentifierGenerator(),
+        ?FlowFactory                               $flowFactory = null,
+        ?StreamParser                              $parser = null
+    )
+    {
         $this->parser = $parser ?? new StreamParser(new DefaultPacketFactory());
 
         $this->parser->onError(
@@ -133,7 +126,6 @@ class ReactMqttClient extends EventEmitter
             }
         );
 
-        $this->identifierGenerator = $identifierGenerator ?? new DefaultIdentifierGenerator();
         $this->flowFactory = $flowFactory ?? new DefaultFlowFactory($this->identifierGenerator, new DefaultIdentifierGenerator(), new DefaultPacketFactory());
     }
 

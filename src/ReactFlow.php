@@ -13,31 +13,18 @@ use React\Promise\Deferred;
  */
 class ReactFlow implements Flow
 {
-    private Flow $decorated;
-
-    /**
-     * @var Deferred<mixed>
-     */
-    private Deferred $deferred;
-
-    private ?Packet $packet;
-
-    private bool $isSilent;
-
-    private bool $forceSingleResult;
-
     /**
      * Constructs an instance of this class.
      *
      * @param Deferred<mixed> $deferred
      */
-    public function __construct(Flow $decorated, Deferred $deferred, ?Packet $packet = null, bool $isSilent = false, bool $forceSingleResult = false)
-    {
-        $this->decorated = $decorated;
-        $this->deferred = $deferred;
-        $this->packet = $packet;
-        $this->isSilent = $isSilent;
-        $this->forceSingleResult = $forceSingleResult;
+    public function __construct(
+        private readonly Flow $decorated,
+        private readonly Deferred $deferred,
+        private ?Packet $packet = null,
+        private readonly bool $isSilent = false,
+        private readonly bool $forceSingleResult = false
+    ) {
     }
 
     public function getCode(): string
