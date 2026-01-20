@@ -61,7 +61,7 @@ class ReactFlow implements Flow
         return $this->decorated->isSuccess();
     }
 
-    public function getResult()
+    public function getResult(): mixed
     {
         return $this->decorated->getResult();
     }
