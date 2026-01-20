@@ -10,7 +10,7 @@ use BinSoul\Net\Mqtt\Packet;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use React\Promise\Deferred;
 use stdClass;
@@ -21,13 +21,13 @@ use stdClass;
 #[Group('unit')]
 final class ReactFlowTest extends TestCase
 {
-    private Flow&MockObject $decoratedFlow;
+    private Flow&Stub $decoratedFlow;
 
     private Deferred $deferred;
 
     protected function setUp(): void
     {
-        $this->decoratedFlow = $this->createMock(Flow::class);
+        $this->decoratedFlow = $this->createStub(Flow::class);
         $this->deferred = new Deferred();
     }
 
@@ -55,7 +55,7 @@ final class ReactFlowTest extends TestCase
 
     public function test_constructor_stores_initial_packet_when_provided(): void
     {
-        $initialPacket = $this->createMock(Packet::class);
+        $initialPacket = $this->createStub(Packet::class);
         $reactFlow = new ReactFlow(
             $this->decoratedFlow,
             $this->deferred,
@@ -148,7 +148,7 @@ final class ReactFlowTest extends TestCase
     #[DataProvider('provideCodes')]
     public function test_get_code_delegates_to_decorated_flow(string $code): void
     {
-        $decoratedFlow = $this->createMock(Flow::class);
+        $decoratedFlow = $this->createStub(Flow::class);
         $decoratedFlow->method('getCode')->willReturn($code);
 
         $reactFlow = new ReactFlow(
@@ -161,14 +161,15 @@ final class ReactFlowTest extends TestCase
 
     public function test_start_delegates_to_decorated_flow(): void
     {
-        $startPacket = $this->createMock(Packet::class);
-        $this->decoratedFlow
+        $decoratedFlow = $this->createMock(Flow::class);
+        $startPacket = $this->createStub(Packet::class);
+        $decoratedFlow
             ->expects($this->once())
             ->method('start')
             ->willReturn($startPacket);
 
         $reactFlow = new ReactFlow(
-            $this->decoratedFlow,
+            $decoratedFlow,
             $this->deferred
         );
 
@@ -179,7 +180,7 @@ final class ReactFlowTest extends TestCase
 
     public function test_start_updates_current_packet(): void
     {
-        $startPacket = $this->createMock(Packet::class);
+        $startPacket = $this->createStub(Packet::class);
         $this->decoratedFlow->method('start')->willReturn($startPacket);
 
         $reactFlow = new ReactFlow(
@@ -209,14 +210,15 @@ final class ReactFlowTest extends TestCase
 
     public function test_accept_delegates_to_decorated_flow(): void
     {
-        $incomingPacket = $this->createMock(Packet::class);
-        $this->decoratedFlow->expects($this->once())
+        $decoratedFlow = $this->createMock(Flow::class);
+        $incomingPacket = $this->createStub(Packet::class);
+        $decoratedFlow->expects($this->once())
             ->method('accept')
             ->with($incomingPacket)
             ->willReturn(true);
 
         $reactFlow = new ReactFlow(
-            $this->decoratedFlow,
+            $decoratedFlow,
             $this->deferred
         );
 
@@ -227,7 +229,7 @@ final class ReactFlowTest extends TestCase
 
     public function test_accept_returns_false_when_decorated_flow_rejects(): void
     {
-        $incomingPacket = $this->createMock(Packet::class);
+        $incomingPacket = $this->createStub(Packet::class);
         $this->decoratedFlow->method('accept')
             ->with($incomingPacket)
             ->willReturn(false);
@@ -244,15 +246,16 @@ final class ReactFlowTest extends TestCase
 
     public function test_next_delegates_to_decorated_flow(): void
     {
-        $incomingPacket = $this->createMock(Packet::class);
-        $nextPacket = $this->createMock(Packet::class);
-        $this->decoratedFlow->expects($this->once())
+        $decoratedFlow = $this->createMock(Flow::class);
+        $incomingPacket = $this->createStub(Packet::class);
+        $nextPacket = $this->createStub(Packet::class);
+        $decoratedFlow->expects($this->once())
             ->method('next')
             ->with($incomingPacket)
             ->willReturn($nextPacket);
 
         $reactFlow = new ReactFlow(
-            $this->decoratedFlow,
+            $decoratedFlow,
             $this->deferred
         );
 
@@ -263,8 +266,8 @@ final class ReactFlowTest extends TestCase
 
     public function test_next_updates_current_packet(): void
     {
-        $incomingPacket = $this->createMock(Packet::class);
-        $nextPacket = $this->createMock(Packet::class);
+        $incomingPacket = $this->createStub(Packet::class);
+        $nextPacket = $this->createStub(Packet::class);
         $this->decoratedFlow->method('next')
             ->with($incomingPacket)
             ->willReturn($nextPacket);
@@ -281,7 +284,7 @@ final class ReactFlowTest extends TestCase
 
     public function test_next_can_return_null_packet(): void
     {
-        $incomingPacket = $this->createMock(Packet::class);
+        $incomingPacket = $this->createStub(Packet::class);
         $this->decoratedFlow->method('next')
             ->with($incomingPacket)
             ->willReturn(null);
@@ -348,7 +351,7 @@ final class ReactFlowTest extends TestCase
     #[DataProvider('provideResults')]
     public function test_get_result_delegates_to_decorated_flow(mixed $result): void
     {
-        $decoratedFlow = $this->createMock(Flow::class);
+        $decoratedFlow = $this->createStub(Flow::class);
         $decoratedFlow->method('getResult')->willReturn($result);
 
         $reactFlow = new ReactFlow(
@@ -362,7 +365,7 @@ final class ReactFlowTest extends TestCase
     #[DataProvider('provideErrorMessages')]
     public function test_get_error_message_delegates_to_decorated_flow(string $errorMessage): void
     {
-        $decoratedFlow = $this->createMock(Flow::class);
+        $decoratedFlow = $this->createStub(Flow::class);
         $decoratedFlow->method('getErrorMessage')->willReturn($errorMessage);
 
         $reactFlow = new ReactFlow(
@@ -385,8 +388,7 @@ final class ReactFlowTest extends TestCase
 
     public function test_get_packet_returns_initial_packet(): void
     {
-        $initialPacket = $this->createMock(Packet::class);
-
+        $initialPacket = $this->createStub(Packet::class);
         $reactFlow = new ReactFlow(
             $this->decoratedFlow,
             $this->deferred,
@@ -408,9 +410,9 @@ final class ReactFlowTest extends TestCase
 
     public function test_flow_state_transitions_through_lifecycle(): void
     {
-        $startPacket = $this->createMock(Packet::class);
-        $incomingPacket = $this->createMock(Packet::class);
-        $nextPacket = $this->createMock(Packet::class);
+        $startPacket = $this->createStub(Packet::class);
+        $incomingPacket = $this->createStub(Packet::class);
+        $nextPacket = $this->createStub(Packet::class);
 
         $this->decoratedFlow->method('start')->willReturn($startPacket);
         $this->decoratedFlow->method('accept')->willReturn(true);
