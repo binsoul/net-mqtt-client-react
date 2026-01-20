@@ -19,6 +19,8 @@ use BinSoul\Net\Mqtt\StreamParser;
 use BinSoul\Net\Mqtt\Subscription;
 use InvalidArgumentException;
 use LogicException;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
@@ -33,33 +35,34 @@ use Throwable;
 /**
  * Tests the ReactMqttClient class.
  */
-class ReactMqttClientTest extends TestCase
+#[Group('unit')]
+final class ReactMqttClientTest extends TestCase
 {
-    private const DEFAULT_HOST = 'localhost';
+    private const string DEFAULT_HOST = 'localhost';
 
-    private const DEFAULT_PORT = 1883;
+    private const int DEFAULT_PORT = 1883;
 
-    private ConnectorInterface $connector;
+    private ConnectorInterface&MockObject $connector;
 
-    private LoopInterface $loop;
+    private LoopInterface&MockObject $loop;
 
-    private ClientIdentifierGenerator $identifierGenerator;
+    private ClientIdentifierGenerator&MockObject $identifierGenerator;
 
-    private FlowFactory $flowFactory;
+    private FlowFactory&MockObject $flowFactory;
 
-    private StreamParser $parser;
+    private StreamParser&MockObject $parser;
 
-    private DuplexStreamInterface $stream;
-
-    /**
-     * @var callable|null
-     */
-    private $streamDataCallback = null;
+    private DuplexStreamInterface&MockObject $stream;
 
     /**
      * @var callable|null
      */
-    private $streamCloseCallback = null;
+    private $streamDataCallback;
+
+    /**
+     * @var callable|null
+     */
+    private $streamCloseCallback;
 
     protected function setUp(): void
     {
@@ -75,35 +78,35 @@ class ReactMqttClientTest extends TestCase
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
 
-        self::assertInstanceOf(ReactMqttClient::class, $client);
+        $this->assertInstanceOf(ReactMqttClient::class, $client);
     }
 
     public function test_get_host_returns_default_host(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
 
-        self::assertSame(self::DEFAULT_HOST, $client->getHost());
+        $this->assertSame(self::DEFAULT_HOST, $client->getHost());
     }
 
     public function test_get_port_returns_default_port(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
 
-        self::assertSame(self::DEFAULT_PORT, $client->getPort());
+        $this->assertSame(self::DEFAULT_PORT, $client->getPort());
     }
 
     public function test_is_connected_returns_false_initially(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
 
-        self::assertFalse($client->isConnected());
+        $this->assertFalse($client->isConnected());
     }
 
     public function test_get_stream_returns_null_initially(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
 
-        self::assertNull($client->getStream());
+        $this->assertNotInstanceOf(DuplexStreamInterface::class, $client->getStream());
     }
 
     public function test_connect_throws_exception_for_empty_host(): void
@@ -178,14 +181,14 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Initially not rejected
-        self::assertFalse($rejected);
+        $this->assertFalse($rejected);
 
         // Trigger timeout callback
-        self::assertNotNull($timeoutCallback);
+        $this->assertNotNull($timeoutCallback);
         $timeoutCallback();
 
-        self::assertTrue($rejected);
-        self::assertInstanceOf(RuntimeException::class, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(RuntimeException::class, $rejectionReason);
     }
 
     public function test_connect_timeout_cancels_pending_connection_promise(): void
@@ -221,11 +224,11 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Trigger timeout
-        self::assertNotNull($timeoutCallback);
+        $this->assertNotNull($timeoutCallback);
         $timeoutCallback();
 
         // Verify the connection promise was cancelled
-        self::assertTrue($cancelled);
+        $this->assertTrue($cancelled);
     }
 
     public function test_connect_timeout_emits_error_event(): void
@@ -260,12 +263,12 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Trigger timeout
-        self::assertNotNull($timeoutCallback);
+        $this->assertNotNull($timeoutCallback);
         $timeoutCallback();
 
         // Verify error event was emitted
-        self::assertTrue($errorEmitted);
-        self::assertInstanceOf(RuntimeException::class, $emittedError);
+        $this->assertTrue($errorEmitted);
+        $this->assertInstanceOf(RuntimeException::class, $emittedError);
     }
 
     public function test_connect_updates_host_and_port(): void
@@ -283,25 +286,23 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertSame('example.com', $client->getHost());
-        self::assertSame(8883, $client->getPort());
+        $this->assertSame('example.com', $client->getHost());
+        $this->assertSame(8883, $client->getPort());
     }
 
     public function test_connect_generates_client_id_when_not_provided(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop, $this->identifierGenerator, $this->flowFactory);
 
-        $this->identifierGenerator->expects(self::once())
+        $this->identifierGenerator->expects($this->once())
             ->method('generateClientIdentifier')
             ->willReturn('generated-client-id');
 
         $connectFlow = $this->createConnectFlowMock();
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingConnectFlow')
             ->with(self::callback(
-                static function (Connection $connection): bool {
-                    return $connection->getClientID() === 'generated-client-id';
-                }
+                static fn(Connection $connection): bool => $connection->getClientID() === 'generated-client-id'
             ))
             ->willReturn($connectFlow);
 
@@ -317,15 +318,13 @@ class ReactMqttClientTest extends TestCase
         $connection = new DefaultConnection();
         $connection = $connection->withClientID('custom-client-id');
 
-        $this->identifierGenerator->expects(self::never())->method('generateClientIdentifier');
+        $this->identifierGenerator->expects($this->never())->method('generateClientIdentifier');
 
         $connectFlow = $this->createConnectFlowMock();
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingConnectFlow')
             ->with(self::callback(
-                static function (Connection $connection): bool {
-                    return $connection->getClientID() === 'custom-client-id';
-                }
+                static fn(Connection $connection): bool => $connection->getClientID() === 'custom-client-id'
             ))
             ->willReturn($connectFlow);
 
@@ -338,7 +337,7 @@ class ReactMqttClientTest extends TestCase
     {
         $client = new ReactMqttClient($this->connector, $this->loop, $this->identifierGenerator, $this->flowFactory);
 
-        $this->connector->expects(self::once())
+        $this->connector->expects($this->once())
             ->method('connect')
             ->with('localhost:1883')
             ->willReturn($this->createResolvedPromise($this->stream));
@@ -357,31 +356,31 @@ class ReactMqttClientTest extends TestCase
         $firstConnection = null;
         $firstPromise = $client->connect('localhost');
         $firstPromise->then(
-            function ($connection) use (&$firstConnection) {
+            function ($connection) use (&$firstConnection): void {
                 $firstConnection = $connection;
             }
         );
 
         // After first connection, should be connected
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($client->isConnected());
 
         // Second connect should return same connection without reconnecting
         $secondPromise = $client->connect('example.com');
         // Verify it returns a resolved promise (not a new connection attempt)
-        self::assertInstanceOf(PromiseInterface::class, $secondPromise);
+        $this->assertInstanceOf(PromiseInterface::class, $secondPromise);
 
         $secondConnection = null;
         $secondPromise->then(
-            function ($connection) use (&$secondConnection) {
+            function ($connection) use (&$secondConnection): void {
                 $secondConnection = $connection;
             }
         );
 
         // Host should still be localhost
-        self::assertSame('localhost', $client->getHost());
-        self::assertNotNull($firstConnection);
-        self::assertNotNull($secondConnection);
-        self::assertSame($firstConnection, $secondConnection);
+        $this->assertSame('localhost', $client->getHost());
+        $this->assertInstanceOf(Connection::class, $firstConnection);
+        $this->assertInstanceOf(Connection::class, $secondConnection);
+        $this->assertSame($firstConnection, $secondConnection);
     }
 
     public function test_connect_returns_same_promise_when_called_twice_during_connection(): void
@@ -405,7 +404,7 @@ class ReactMqttClientTest extends TestCase
         $secondPromise = $client->connect('localhost');
 
         // Both should return the same promise instance
-        self::assertSame($firstPromise, $secondPromise);
+        $this->assertSame($firstPromise, $secondPromise);
     }
 
     public function test_connect_allows_new_connection_after_previous_failure(): void
@@ -415,7 +414,7 @@ class ReactMqttClientTest extends TestCase
         $this->loop->method('addTimer')->willReturn($this->createMock(TimerInterface::class));
 
         // First connection will fail immediately
-        $this->connector->expects(self::exactly(2))
+        $this->connector->expects($this->exactly(2))
             ->method('connect')
             ->willReturnOnConsecutiveCalls(
                 $this->createRejectedPromise(new RuntimeException('First connection failed')),
@@ -433,8 +432,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($firstFailed);
-        self::assertFalse($client->isConnected());
+        $this->assertTrue($firstFailed);
+        $this->assertFalse($client->isConnected());
 
         // Second connection attempt - should succeed
         $this->setupStreamCallbacks();
@@ -454,8 +453,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($secondSucceeded);
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($secondSucceeded);
+        $this->assertTrue($client->isConnected());
     }
 
     public function test_connect_handles_registration_failure(): void
@@ -522,14 +521,14 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Verify the catch handler behavior
-        self::assertTrue($rejected);
-        self::assertInstanceOf(RuntimeException::class, $rejectionReason);
-        self::assertTrue($errorEmitted);
-        self::assertSame($emittedError, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(RuntimeException::class, $rejectionReason);
+        $this->assertTrue($errorEmitted);
+        $this->assertSame($emittedError, $rejectionReason);
 
-        self::assertTrue($streamClosed);
-        self::assertTrue($closeEmitted);
-        self::assertInstanceOf(Connection::class, $emittedConnection);
+        $this->assertTrue($streamClosed);
+        $this->assertTrue($closeEmitted);
+        $this->assertInstanceOf(Connection::class, $emittedConnection);
     }
 
     public function test_connect_resets_connecting_state_on_registration_failure(): void
@@ -569,7 +568,7 @@ class ReactMqttClientTest extends TestCase
 
         // Verify connecting state was reset (isConnecting = false, connectionDeferred = null)
         // This allows reconnection attempts
-        self::assertFalse($client->isConnected());
+        $this->assertFalse($client->isConnected());
 
         // Verify we can try to connect again without "already connecting" error
         $canReconnect = true;
@@ -579,11 +578,11 @@ class ReactMqttClientTest extends TestCase
                 static function (): void {
                 }
             );
-        } catch (LogicException $e) {
+        } catch (LogicException) {
             $canReconnect = false;
         }
 
-        self::assertTrue($canReconnect);
+        $this->assertTrue($canReconnect);
     }
 
     public function test_connect_closes_stream_on_registration_failure(): void
@@ -613,7 +612,7 @@ class ReactMqttClientTest extends TestCase
         $this->stream->method('write')->willReturn(true);
 
         $streamCloseCalled = false;
-        $this->stream->expects(self::once())
+        $this->stream->expects($this->once())
             ->method('close')
             ->willReturnCallback(
                 static function () use (&$streamCloseCalled): void {
@@ -626,7 +625,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($streamCloseCalled);
+        $this->assertTrue($streamCloseCalled);
     }
 
     public function test_connect_emits_error_event_on_connection_failure(): void
@@ -652,7 +651,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($errorEmitted);
+        $this->assertTrue($errorEmitted);
     }
 
     public function test_connect_rejects_promise_on_connection_failure(): void
@@ -672,7 +671,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($rejected);
+        $this->assertTrue($rejected);
     }
 
     public function test_disconnect_returns_resolved_promise_when_not_connected(): void
@@ -686,7 +685,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($resolved);
+        $this->assertTrue($resolved);
     }
 
     public function test_disconnect_throws_exception_for_negative_timeout(): void
@@ -709,7 +708,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $disconnectFlow = $this->createDisconnectFlowMock();
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingDisconnectFlow')
             ->willReturn($disconnectFlow);
 
@@ -752,12 +751,12 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Verify error event was emitted
-        self::assertTrue($errorEmitted);
-        self::assertSame($exception, $emittedError);
+        $this->assertTrue($errorEmitted);
+        $this->assertSame($exception, $emittedError);
 
         // Verify promise was rejected with the exception
-        self::assertTrue($promiseRejected);
-        self::assertSame($exception, $rejectionReason);
+        $this->assertTrue($promiseRejected);
+        $this->assertSame($exception, $rejectionReason);
 
         // Verify disconnecting state was reset
         // We can verify this by checking that a new disconnect can be attempted
@@ -768,11 +767,11 @@ class ReactMqttClientTest extends TestCase
                 static function (): void {
                 }
             );
-        } catch (LogicException $e) {
+        } catch (LogicException) {
             $canDisconnectAgain = false;
         }
 
-        self::assertTrue($canDisconnectAgain);
+        $this->assertTrue($canDisconnectAgain);
     }
 
     public function test_disconnect_returns_same_promise_when_called_twice_during_disconnection(): void
@@ -798,7 +797,7 @@ class ReactMqttClientTest extends TestCase
         $secondPromise = $client->disconnect();
 
         // Both should return the same promise instance
-        self::assertSame($firstPromise, $secondPromise);
+        $this->assertSame($firstPromise, $secondPromise);
     }
 
     public function test_disconnect_allows_new_disconnection_after_previous_completion(): void
@@ -826,8 +825,8 @@ class ReactMqttClientTest extends TestCase
             $closeCallback();
         }
 
-        self::assertTrue($firstDisconnected);
-        self::assertFalse($client->isConnected());
+        $this->assertTrue($firstDisconnected);
+        $this->assertFalse($client->isConnected());
 
         // Reconnect
         $this->streamCloseCallback = null;
@@ -839,11 +838,11 @@ class ReactMqttClientTest extends TestCase
 
         try {
             $client->disconnect();
-        } catch (LogicException $e) {
+        } catch (LogicException) {
             $canDisconnect = false;
         }
 
-        self::assertTrue($canDisconnect);
+        $this->assertTrue($canDisconnect);
     }
 
     public function test_subscribe_rejects_when_not_connected(): void
@@ -860,8 +859,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($rejected);
-        self::assertInstanceOf(LogicException::class, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(LogicException::class, $rejectionReason);
     }
 
     public function test_subscribe_starts_subscribe_flow_when_connected(): void
@@ -874,7 +873,7 @@ class ReactMqttClientTest extends TestCase
         $subscription = $this->createMock(Subscription::class);
         $subscribeFlow = $this->createFlowMock('subscribe', [$subscription]);
 
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingSubscribeFlow')
             ->with([$subscription])
             ->willReturn($subscribeFlow);
@@ -886,7 +885,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertSame($subscription, $result);
+        $this->assertSame($subscription, $result);
     }
 
     public function test_subscribe_array_starts_subscribe_flow_when_connected(): void
@@ -899,7 +898,7 @@ class ReactMqttClientTest extends TestCase
         $subscriptions = [$this->createMock(Subscription::class), $this->createMock(Subscription::class)];
         $subscribeFlow = $this->createFlowMock('subscribe', $subscriptions);
 
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingSubscribeFlow')
             ->with($subscriptions)
             ->willReturn($subscribeFlow);
@@ -911,7 +910,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertSame($subscriptions, $result);
+        $this->assertSame($subscriptions, $result);
     }
 
     public function test_unsubscribe_rejects_when_not_connected(): void
@@ -928,8 +927,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($rejected);
-        self::assertInstanceOf(LogicException::class, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(LogicException::class, $rejectionReason);
     }
 
     public function test_unsubscribe_starts_unsubscribe_flow_when_connected(): void
@@ -942,7 +941,7 @@ class ReactMqttClientTest extends TestCase
         $subscription = $this->createMock(Subscription::class);
         $unsubscribeFlow = $this->createFlowMock('unsubscribe', [$subscription]);
 
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingUnsubscribeFlow')
             ->with([$subscription])
             ->willReturn($unsubscribeFlow);
@@ -954,7 +953,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertSame($subscription, $result);
+        $this->assertSame($subscription, $result);
     }
 
     public function test_unsubscribe_array_starts_unsubscribe_flow_when_connected(): void
@@ -967,7 +966,7 @@ class ReactMqttClientTest extends TestCase
         $subscriptions = [$this->createMock(Subscription::class), $this->createMock(Subscription::class)];
         $unsubscribeFlow = $this->createFlowMock('unsubscribe', $subscriptions);
 
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingUnsubscribeFlow')
             ->with($subscriptions)
             ->willReturn($unsubscribeFlow);
@@ -979,7 +978,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertSame($subscriptions, $result);
+        $this->assertSame($subscriptions, $result);
     }
 
     public function test_publish_rejects_when_not_connected(): void
@@ -996,8 +995,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($rejected);
-        self::assertInstanceOf(LogicException::class, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(LogicException::class, $rejectionReason);
     }
 
     public function test_publish_starts_publish_flow_when_connected(): void
@@ -1010,7 +1009,7 @@ class ReactMqttClientTest extends TestCase
         $message = new DefaultMessage('test/topic', 'payload');
         $publishFlow = $this->createFlowMock();
 
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildOutgoingPublishFlow')
             ->with($message)
             ->willReturn($publishFlow);
@@ -1022,7 +1021,7 @@ class ReactMqttClientTest extends TestCase
     {
         $client = new ReactMqttClient($this->connector, $this->loop);
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn (string $topic): string => 'generated';
+        $generator = static fn(string $topic): string => 'generated';
 
         $rejected = false;
         $rejectionReason = null;
@@ -1033,8 +1032,8 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($rejected);
-        self::assertInstanceOf(LogicException::class, $rejectionReason);
+        $this->assertTrue($rejected);
+        $this->assertInstanceOf(LogicException::class, $rejectionReason);
     }
 
     public function test_publish_periodically_creates_periodic_timer(): void
@@ -1045,9 +1044,9 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn (string $topic): string => 'generated';
+        $generator = static fn(string $topic): string => 'generated';
 
-        $this->loop->expects(self::once())
+        $this->loop->expects($this->once())
             ->method('addPeriodicTimer')
             ->with(5, self::anything())
             ->willReturn($this->createMock(TimerInterface::class));
@@ -1090,11 +1089,11 @@ class ReactMqttClientTest extends TestCase
 
         $client->publishPeriodically(5, $message, $generator);
 
-        self::assertNotNull($timerCallback);
+        $this->assertNotNull($timerCallback);
         $timerCallback();
 
-        self::assertTrue($generatorCalled);
-        self::assertSame('test/topic', $receivedTopic);
+        $this->assertTrue($generatorCalled);
+        $this->assertSame('test/topic', $receivedTopic);
     }
 
     public function test_publish_periodically_calls_on_progress_callback(): void
@@ -1105,7 +1104,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $message = new DefaultMessage('test/topic', 'payload');
-        $generator = static fn (string $topic): string => 'generated';
+        $generator = static fn(string $topic): string => 'generated';
 
         $onProgressCalled = false;
         $onProgress = static function () use (&$onProgressCalled): void {
@@ -1127,10 +1126,10 @@ class ReactMqttClientTest extends TestCase
 
         $client->publishPeriodically(5, $message, $generator, $onProgress);
 
-        self::assertNotNull($timerCallback);
+        $this->assertNotNull($timerCallback);
         $timerCallback();
 
-        self::assertTrue($onProgressCalled);
+        $this->assertTrue($onProgressCalled);
     }
 
     public function test_get_stream_returns_stream_after_connection(): void
@@ -1140,7 +1139,7 @@ class ReactMqttClientTest extends TestCase
         $this->setupSuccessfulConnection();
         $client->connect('localhost');
 
-        self::assertInstanceOf(DuplexStreamInterface::class, $client->getStream());
+        $this->assertInstanceOf(DuplexStreamInterface::class, $client->getStream());
     }
 
     public function test_is_connected_returns_true_after_successful_connection(): void
@@ -1150,14 +1149,14 @@ class ReactMqttClientTest extends TestCase
         $this->setupSuccessfulConnection();
         $client->connect('localhost');
 
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($client->isConnected());
     }
 
     public function test_handle_receive_ignores_data_when_not_connected(): void
     {
         $client = new ReactMqttClient($this->connector, $this->loop, $this->identifierGenerator, $this->flowFactory, $this->parser);
 
-        $this->parser->expects(self::never())->method('push');
+        $this->parser->expects($this->never())->method('push');
 
         $this->setupStreamCallbacks();
         $this->connector->method('connect')->willReturn($this->createResolvedPromise($this->stream));
@@ -1170,7 +1169,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         // Reset isConnecting state by failing the connection
-        self::assertInstanceOf(ReactMqttClient::class, $client);
+        $this->assertInstanceOf(ReactMqttClient::class, $client);
     }
 
     public function test_handle_receive_processes_incoming_packets_when_connected(): void
@@ -1180,7 +1179,7 @@ class ReactMqttClientTest extends TestCase
         $packet = $this->createMock(Packet::class);
         $packet->method('getPacketType')->willReturn(Packet::TYPE_PINGRESP);
 
-        $this->parser->expects(self::once())
+        $this->parser->expects($this->once())
             ->method('push')
             ->with('incoming-data')
             ->willReturn([$packet]);
@@ -1190,7 +1189,7 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger data callback
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('incoming-data');
     }
 
@@ -1209,11 +1208,11 @@ class ReactMqttClientTest extends TestCase
 
         // Send data that triggers flow completion and array reindexing
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('connack-packet-data');
 
         // Test passes if no errors occur during reindexing
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($client->isConnected());
     }
 
     public function test_handle_receive_calls_handle_send_after_processing(): void
@@ -1241,11 +1240,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger data callback which should call handleSend
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('incoming-data');
 
         // handleSend may trigger additional writes if there are queued flows
-        self::assertGreaterThanOrEqual($initialWriteCount, $writeCallCount);
+        $this->assertGreaterThanOrEqual($initialWriteCount, $writeCallCount);
     }
 
     public function test_handle_receive_processes_pubcomp_packet_and_continues_flow(): void
@@ -1286,11 +1285,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger data callback with PUBCOMP packet
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('pubcomp-data');
 
         // Verify flow was completed
-        self::assertTrue($publishEventEmitted);
+        $this->assertTrue($publishEventEmitted);
     }
 
     public function test_handle_receive_processes_publish_packet_and_starts_incoming_flow(): void
@@ -1309,17 +1308,15 @@ class ReactMqttClientTest extends TestCase
         $this->parser->method('push')->willReturn([$publishPacket]);
 
         $incomingPublishFlow = $this->createFlowMock();
-        $this->flowFactory->expects(self::once())
+        $this->flowFactory->expects($this->once())
             ->method('buildIncomingPublishFlow')
             ->with(
                 self::callback(
-                    static function (Message $message): bool {
-                        return $message->getTopic() === 'test/topic'
-                            && $message->getPayload() === 'test-payload'
-                            && $message->getQosLevel() === 1
-                            && $message->isRetained() === false
-                            && $message->isDuplicate() === false;
-                    }
+                    static fn(Message $message): bool => $message->getTopic() === 'test/topic'
+                        && $message->getPayload() === 'test-payload'
+                        && $message->getQosLevel() === 1
+                        && $message->isRetained() === false
+                        && $message->isDuplicate() === false
                 ),
                 123
             )
@@ -1329,7 +1326,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('publish-packet-data');
     }
 
@@ -1346,7 +1343,7 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/Expected.*PublishRequestPacket/');
@@ -1394,11 +1391,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger incoming packet that will be accepted by the flow
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('puback-packet-data');
 
-        self::assertTrue($errorEmitted);
-        self::assertSame($exception, $emittedError);
+        $this->assertTrue($errorEmitted);
+        $this->assertSame($exception, $emittedError);
     }
 
     public function test_start_flow_emits_error_and_rejects_promise_when_flow_start_throws_exception(): void
@@ -1437,12 +1434,12 @@ class ReactMqttClientTest extends TestCase
         );
 
         // Verify error was emitted
-        self::assertTrue($errorEmitted);
-        self::assertSame($exception, $emittedError);
+        $this->assertTrue($errorEmitted);
+        $this->assertSame($exception, $emittedError);
 
         // Verify promise was rejected with the same exception
-        self::assertTrue($promiseRejected);
-        self::assertSame($exception, $rejectionReason);
+        $this->assertTrue($promiseRejected);
+        $this->assertSame($exception, $rejectionReason);
     }
 
     public function test_continue_flow_finishes_flow_when_no_response_and_flow_is_finished(): void
@@ -1492,17 +1489,17 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger data callback - this calls continueFlow which should schedule futureTick
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('puback-data');
 
         // Verify futureTick was called for finishing the flow in continueFlow
-        self::assertCount(1, $futureTickCallbacks);
+        $this->assertCount(1, $futureTickCallbacks);
 
         // Execute futureTick to finish flow
         $futureTickCallbacks[0]();
 
         // Verify flow finished and event was emitted
-        self::assertTrue($publishEventEmitted);
+        $this->assertTrue($publishEventEmitted);
     }
 
     public function test_continue_flow_queues_in_sending_flows_when_written_flow_is_set(): void
@@ -1529,10 +1526,10 @@ class ReactMqttClientTest extends TestCase
         $this->parser->method('push')->willReturn([$pubrecPacket]);
 
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('data');
 
-        self::assertTrue(true);
+        $this->assertTrue(true);
     }
 
     public function test_continue_flow_writes_response_packet_when_flow_returns_packet(): void
@@ -1576,11 +1573,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger incoming packet
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('pubrec-packet-data');
 
         // Verify response packet was written
-        self::assertGreaterThan($initialWriteCount, count($writtenPackets));
+        $this->assertGreaterThan($initialWriteCount, count($writtenPackets));
     }
 
     public function test_continue_flow_queues_flow_when_another_flow_is_being_written(): void
@@ -1621,11 +1618,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger incoming packet - second flow should be queued
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('suback-packet-data');
 
         // Test passes if no errors occur during queueing
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($client->isConnected());
     }
 
     public function test_continue_flow_schedules_finish_when_flow_is_complete(): void
@@ -1672,12 +1669,12 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger incoming packet that completes the flow
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('suback-packet-data');
 
         // Verify futureTick was called and flow was finished
-        self::assertTrue($futureTickCalled);
-        self::assertTrue($subscribeEventEmitted);
+        $this->assertTrue($futureTickCalled);
+        $this->assertTrue($subscribeEventEmitted);
     }
 
     public function test_continue_flow_writes_to_stream_when_no_flow_is_pending(): void
@@ -1718,10 +1715,10 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger incoming packet
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('pubrec-packet-data');
 
-        self::assertTrue($streamWriteCalled);
+        $this->assertTrue($streamWriteCalled);
     }
 
     public function test_handle_close_cancels_all_timers(): void
@@ -1740,11 +1737,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger close callback
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
         // Verify timers were cancelled (at least the periodic ping timer)
-        self::assertNotEmpty($cancelledTimers);
+        $this->assertNotEmpty($cancelledTimers);
     }
 
     public function test_handle_close_resets_connection_state(): void
@@ -1754,17 +1751,17 @@ class ReactMqttClientTest extends TestCase
         $this->setupSuccessfulConnection(true);
         $client->connect('localhost');
 
-        self::assertTrue($client->isConnected());
-        self::assertNotNull($client->getStream());
+        $this->assertTrue($client->isConnected());
+        $this->assertInstanceOf(DuplexStreamInterface::class, $client->getStream());
 
         // Trigger close callback
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
         // Verify state is reset
-        self::assertFalse($client->isConnected());
-        self::assertNull($client->getStream());
+        $this->assertFalse($client->isConnected());
+        $this->assertNull($client->getStream());
     }
 
     public function test_handle_close_invokes_on_close_callback_when_set(): void
@@ -1790,11 +1787,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger close callback to simulate stream closing
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
-        self::assertTrue($callbackInvoked);
-        self::assertInstanceOf(Connection::class, $passedConnection);
+        $this->assertTrue($callbackInvoked);
+        $this->assertInstanceOf(Connection::class, $passedConnection);
     }
 
     public function test_handle_close_emits_close_event_when_connection_exists(): void
@@ -1816,11 +1813,11 @@ class ReactMqttClientTest extends TestCase
 
         // Trigger close callback
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
-        self::assertTrue($closeEventEmitted);
-        self::assertInstanceOf(Connection::class, $emittedConnection);
+        $this->assertTrue($closeEventEmitted);
+        $this->assertInstanceOf(Connection::class, $emittedConnection);
     }
 
     public function test_handle_close_does_not_emit_close_event_when_no_connection(): void
@@ -1845,7 +1842,7 @@ class ReactMqttClientTest extends TestCase
         }
 
         // Close event should not be emitted when there's no connection
-        self::assertFalse($closeEventEmitted);
+        $this->assertFalse($closeEventEmitted);
     }
 
     public function test_handle_close_clears_on_close_callback_after_invocation(): void
@@ -1867,10 +1864,10 @@ class ReactMqttClientTest extends TestCase
 
         // First close
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
-        self::assertSame(1, $callbackInvokedCount);
+        $this->assertSame(1, $callbackInvokedCount);
 
         // Reconnect and close again - callback should not be invoked again
         $this->streamCloseCallback = null;
@@ -1878,11 +1875,11 @@ class ReactMqttClientTest extends TestCase
         $client->connect('localhost');
 
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
         // Should still be 1 because onCloseCallback was cleared
-        self::assertSame(1, $callbackInvokedCount);
+        $this->assertSame(1, $callbackInvokedCount);
     }
 
     public function test_handle_close_resets_all_deferred_states(): void
@@ -1894,11 +1891,11 @@ class ReactMqttClientTest extends TestCase
         // Start connecting
         $client->connect('localhost');
 
-        self::assertTrue($client->isConnected());
+        $this->assertTrue($client->isConnected());
 
         // Trigger close
         $closeCallback = $this->streamCloseCallback;
-        self::assertNotNull($closeCallback);
+        $this->assertNotNull($closeCallback);
         $closeCallback();
 
         // Verify we can connect again without issues (proves state was properly reset)
@@ -1912,7 +1909,7 @@ class ReactMqttClientTest extends TestCase
             }
         );
 
-        self::assertTrue($connected);
+        $this->assertTrue($connected);
     }
 
     public function test_finish_flow_converts_array_result_to_single_value_when_force_single_result_is_true(): void
@@ -1948,12 +1945,12 @@ class ReactMqttClientTest extends TestCase
         $this->parser->method('push')->willReturn([$subackPacket]);
 
         $dataCallback = $this->streamDataCallback;
-        self::assertNotNull($dataCallback);
+        $this->assertNotNull($dataCallback);
         $dataCallback('data');
 
         $this->loop->run();
 
-        self::assertSame($subscription, $result);
+        $this->assertSame($subscription, $result);
     }
 
     public function test_connect_sets_up_periodic_keepalive_ping_timer(): void
@@ -1963,7 +1960,7 @@ class ReactMqttClientTest extends TestCase
         $periodicTimerCallback = null;
         $timerInterval = null;
         $this->loop->method('addPeriodicTimer')->willReturnCallback(
-            static function ($interval, $callback) use (&$periodicTimerCallback, &$timerInterval) {
+            static function ($interval, $callback) use (&$periodicTimerCallback, &$timerInterval): object {
                 $timerInterval = $interval;
                 $periodicTimerCallback = $callback;
 
@@ -1976,7 +1973,7 @@ class ReactMqttClientTest extends TestCase
         $pingFlow = $this->createMock(Flow::class);
         $pingPacket = $this->createMock(Packet::class);
         $pingFlow->method('start')->willReturnCallback(
-            static function () use ($pingPacket, &$pingFlowCalled) {
+            static function () use ($pingPacket, &$pingFlowCalled): Packet&MockObject {
                 $pingFlowCalled = true;
 
                 return $pingPacket;
@@ -1987,13 +1984,13 @@ class ReactMqttClientTest extends TestCase
         $this->setupSuccessfulConnection();
         $client->connect('localhost', 1883, new DefaultConnection('', '', null, 'test', 60));
 
-        self::assertNotNull($periodicTimerCallback);
-        self::assertEquals(45, $timerInterval);
-        self::assertFalse($pingFlowCalled);
+        $this->assertNotNull($periodicTimerCallback);
+        $this->assertEquals(45, $timerInterval);
+        $this->assertFalse($pingFlowCalled);
 
         $periodicTimerCallback();
 
-        self::assertTrue($pingFlowCalled);
+        $this->assertTrue($pingFlowCalled);
     }
 
     public function test_connect_response_timeout_callback_rejects_promise(): void
@@ -2003,7 +2000,7 @@ class ReactMqttClientTest extends TestCase
         $responseTimeoutCallback = null;
         $timer = $this->createMock(TimerInterface::class);
         $this->loop->method('addTimer')->willReturnCallback(
-            static function ($timeout, $callback) use (&$responseTimeoutCallback, $timer) {
+            static function ($timeout, $callback) use (&$responseTimeoutCallback, $timer): TimerInterface&MockObject {
                 $responseTimeoutCallback = $callback;
 
                 return $timer;
@@ -2021,7 +2018,7 @@ class ReactMqttClientTest extends TestCase
 
         $promise = $client->connect('localhost', 1883, null, 5);
 
-        self::assertNotNull($responseTimeoutCallback);
+        $this->assertNotNull($responseTimeoutCallback);
 
         $error = null;
         $promise->then(
@@ -2033,7 +2030,7 @@ class ReactMqttClientTest extends TestCase
 
         $responseTimeoutCallback();
 
-        self::assertInstanceOf(RuntimeException::class, $error);
+        $this->assertInstanceOf(RuntimeException::class, $error);
     }
 
     private function setupSuccessfulConnection(bool $withCloseCallback = false): void
@@ -2111,7 +2108,7 @@ class ReactMqttClientTest extends TestCase
         return $flow;
     }
 
-    private function createResolvedPromise($value): PromiseInterface
+    private function createResolvedPromise(DuplexStreamInterface $value): PromiseInterface
     {
         return new Promise(
             static function (callable $resolve) use ($value): void {

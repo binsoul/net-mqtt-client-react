@@ -12,6 +12,8 @@ use BinSoul\Net\Mqtt\DefaultSubscription;
 use BinSoul\Net\Mqtt\Message;
 use BinSoul\Net\Mqtt\Subscription;
 use Exception;
+use PHPUnit\Framework\Attributes\Depends;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
@@ -20,51 +22,40 @@ use React\Socket\Connector;
 /**
  * Tests the ReactMqttClient class.
  *
- * @group   integration
- *
  * @author  Alin Eugen Deac <ade@vestergaardcompany.com>
  */
-class ReactMqttClientTest extends TestCase
+#[Group('integration')]
+final class ReactMqttClientTest extends TestCase
 {
     /**
      * The default hostname.
      *
      * @see http://iot.eclipse.org/getting-started
-     *
-     * @var string
      */
-    private const DEFAULT_HOSTNAME = 'broker.hivemq.com';
+    private const string DEFAULT_HOSTNAME = 'broker.hivemq.com';
 
     /**
      * The default port.
      *
      * 1883, unsecured connection
      * 8883, secure connection
-     *
-     * @var int
      */
-    private const DEFAULT_PORT = 1883;
+    private const int DEFAULT_PORT = 1883;
 
     /**
      * The default timeout for the connection attempt.
-     *
-     * @var int
      */
-    private const DEFAULT_CONNECT_TIMEOUT = 30;
+    private const int DEFAULT_CONNECT_TIMEOUT = 30;
 
     /**
      * The topic prefix.
-     *
-     * @var string
      */
-    private const TOPIC_PREFIX = 'testing/BinSoul/';
+    private const string TOPIC_PREFIX = 'testing/BinSoul/';
 
     /**
      * Loop timeout, duration in seconds.
-     *
-     * @var int
      */
-    private const MAXIMUM_EXECUTION_TIME = 60;
+    private const int MAXIMUM_EXECUTION_TIME = 60;
 
     /**
      * The address or domain name of the server.
@@ -107,13 +98,13 @@ class ReactMqttClientTest extends TestCase
         // Add loop timeout
         $this->loop->addPeriodicTimer(
             self::MAXIMUM_EXECUTION_TIME,
-            function (): void {
+            function (): never {
                 $this->loop->stop();
                 $this->fail('Test timeout');
             }
         );
 
-        echo 'Test: ' . str_replace(['test_', '_'], ['', ' '], $this->getName()) . PHP_EOL . PHP_EOL;
+        echo 'Test: ' . str_replace(['test_', '_'], ['', ' '], $this->name()) . PHP_EOL . PHP_EOL;
     }
 
     protected function tearDown(): void
@@ -155,9 +146,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that a client fails to connect to a invalid broker.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_connect_failure(): void
     {
         $client = $this->buildClient();
@@ -240,9 +230,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Test that client's connection state is updated correctly when connected.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_is_connected_when_connect_event_emitted(): void
     {
         $client = $this->buildClient();
@@ -321,9 +310,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Test that client's connection state is updated correctly when disconnected.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_is_disconnected_when_disconnect_event_emitted(): void
     {
         $client = $this->buildClient();
@@ -363,9 +351,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that messages can be send and received successfully.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_send_and_receive_message_qos_level_0(): void
     {
         $subscription = $this->generateSubscription(0);
@@ -376,9 +363,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that messages can be send and received successfully with QoS level 1.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_send_and_receive_message_qos_level_1(): void
     {
         $subscription = $this->generateSubscription(1);
@@ -389,9 +375,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that messages can be send and received successfully with QoS level 2.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_send_and_receive_message_qos_level_2(): void
     {
         $subscription = $this->generateSubscription(2);
@@ -402,9 +387,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that a client can subscribe to multiple filters at once and receive messages.
-     *
-     * @depends test_send_and_receive_message_qos_level_0
      */
+    #[Depends('test_send_and_receive_message_qos_level_0')]
     public function test_subscribe_and_publish_multiple(): void
     {
         $client = $this->buildClient();
@@ -468,9 +452,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Test that client can to subscribe to a single level wildcard filter, e.g. /A/B/+/C.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_can_subscribe_to_single_level_wildcard_filter(): void
     {
         $subscription = $this->generateSubscription();
@@ -482,9 +465,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Test that client can to subscribe to a multi level wildcard filter, e.g. /A/B/#.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_can_subscribe_to_multi_level_wildcard_filter(): void
     {
         $subscription = $this->generateSubscription();
@@ -496,9 +478,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that retained messages can be successfully published.
-     *
-     * @depends test_send_and_receive_message_qos_level_1
      */
+    #[Depends('test_send_and_receive_message_qos_level_1')]
     public function test_retained_message_is_published(): void
     {
         $client = $this->buildClient();
@@ -521,7 +502,7 @@ class ReactMqttClientTest extends TestCase
                 // Cleanup retained message on broker
                 $client->publish($message->withPayload('')->withQosLevel(1))
                     ->catch(
-                        function () {
+                        function (): void {
                             // ignore
                         }
                     )
@@ -572,9 +553,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that the will of a client can be set successfully.
-     *
-     * @depends test_send_and_receive_message_qos_level_1
      */
+    #[Depends('test_send_and_receive_message_qos_level_1')]
     public function test_client_will_is_set(): void
     {
         $regularClient = $this->buildClient('regular');
@@ -646,9 +626,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Test that client is able to publish and receive messages, multiple times.
-     *
-     * @depends test_send_and_receive_message_qos_level_0
      */
+    #[Depends('test_send_and_receive_message_qos_level_0')]
     public function test_publish_and_receive_multiple_times(): void
     {
         $client = $this->buildClient();
@@ -717,9 +696,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that messages can be published periodically.
-     *
-     * @depends test_send_and_receive_message_qos_level_0
      */
+    #[Depends('test_send_and_receive_message_qos_level_0')]
     public function test_publish_periodically(): void
     {
         $client = $this->buildClient();
@@ -771,9 +749,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that a client can unsubscribe from a topic.
-     *
-     * @depends test_connect_success
      */
+    #[Depends('test_connect_success')]
     public function test_unsubscribe(): void
     {
         $client = $this->buildClient();
@@ -813,9 +790,8 @@ class ReactMqttClientTest extends TestCase
 
     /**
      * Tests that a client can unsubscribe from multiple filters at once.
-     *
-     * @depends test_unsubscribe
      */
+    #[Depends('test_unsubscribe')]
     public function test_unsubscribe_multiple(): void
     {
         $client = $this->buildClient();
@@ -905,7 +881,7 @@ class ReactMqttClientTest extends TestCase
     /**
      * Stores an expectation.
      */
-    private function addExpectation($expected, $actual, string $message = ''): void
+    private function addExpectation(mixed $expected, mixed $actual, string $message = ''): void
     {
         $this->expectations[] = [$expected, $actual, $message];
     }
@@ -925,17 +901,17 @@ class ReactMqttClientTest extends TestCase
     {
         foreach ($this->expectations as $expectation) {
             if (is_bool($expectation[0])) {
-                if ($expectation[0] === true) {
-                    self::assertTrue($expectation[1], $expectation[2]);
+                if ($expectation[0]) {
+                    $this->assertTrue($expectation[1], $expectation[2]);
                 } else {
-                    self::assertFalse($expectation[1], $expectation[2]);
+                    $this->assertFalse($expectation[1], $expectation[2]);
                 }
             } else {
-                self::assertEquals($expectation[0], $expectation[1], $expectation[2]);
+                $this->assertEquals($expectation[0], $expectation[1], $expectation[2]);
             }
         }
 
-        if (! empty($this->failures)) {
+        if ($this->failures !== []) {
             self::fail(implode(' / ', $this->failures));
         }
     }
