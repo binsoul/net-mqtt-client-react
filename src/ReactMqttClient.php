@@ -243,9 +243,7 @@ class ReactMqttClient extends EventEmitter
                                 $this->emitError($reason);
                                 $deferred->reject($reason);
 
-                                if ($this->stream !== null) {
-                                    $this->stream->close();
-                                }
+                                $this->stream?->close();
 
                                 $this->emit('close', [$connection, $this]);
                             }
@@ -323,9 +321,7 @@ class ReactMqttClient extends EventEmitter
                     $this->timer[] = $this->loop->addTimer(
                         $timeout,
                         function (): void {
-                            if ($this->stream !== null) {
-                                $this->stream->close();
-                            }
+                            $this->stream?->close();
                         }
                     );
                 }
@@ -353,7 +349,7 @@ class ReactMqttClient extends EventEmitter
      *
      * @phpstan-return ($subscription is Subscription ? PromiseInterface<Subscription> : PromiseInterface<array<int, Subscription>>)
      */
-    public function subscribe($subscription): PromiseInterface
+    public function subscribe(Subscription|array $subscription): PromiseInterface
     {
         if (! $this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
@@ -381,7 +377,7 @@ class ReactMqttClient extends EventEmitter
      *
      * @phpstan-return ($subscription is Subscription ? PromiseInterface<Subscription> : PromiseInterface<array<int, Subscription>>)
      */
-    public function unsubscribe($subscription): PromiseInterface
+    public function unsubscribe(Subscription|array $subscription): PromiseInterface
     {
         if (! $this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
@@ -765,9 +761,7 @@ class ReactMqttClient extends EventEmitter
             if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $internalFlow;
             } else {
-                if ($this->stream !== null) {
-                    $this->stream->write($packet);
-                }
+                $this->stream?->write($packet);
 
                 $this->writtenFlow = $internalFlow;
                 $this->handleSend();
@@ -800,9 +794,7 @@ class ReactMqttClient extends EventEmitter
             if ($this->writtenFlow !== null) {
                 $this->sendingFlows[] = $flow;
             } else {
-                if ($this->stream !== null) {
-                    $this->stream->write($response);
-                }
+                $this->stream?->write($response);
 
                 $this->writtenFlow = $flow;
                 $this->handleSend();
