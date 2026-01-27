@@ -421,7 +421,7 @@ class ReactMqttClient extends EventEmitter
      *
      * @return PromiseInterface<never>
      */
-    public function publishPeriodically(int $interval, Message $message, callable $generator, callable $onProgress = null): PromiseInterface
+    public function publishPeriodically(int $interval, Message $message, callable $generator, ?callable $onProgress = null): PromiseInterface
     {
         if (! $this->isConnected) {
             return reject(new LogicException('The client is not connected.'));
